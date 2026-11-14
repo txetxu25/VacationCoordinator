@@ -51,7 +51,7 @@ export function parseLegacy(values: string[][], year: number): Legacy {
   return { people, grid };
 }
 
-/** Propone a qué persona de la app corresponde cada nombre antiguo (p. ej. "Mar" -> "Martina"). */
+/** Propone a qué persona de la app corresponde cada nombre antiguo (p. ej. "Leo" -> "Leonor"). */
 export function guessMapping(legacy: string[], current: string[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const name of legacy) {
