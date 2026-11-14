@@ -139,3 +139,10 @@ p.neg { color: var(--danger); }
 .ltype .edit input.short { width: 3em; }
 .month { cursor: pointer; }
 .month:active { background: #eef3ef; }
+
+.period { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.period label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+.check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.9rem; }
+.check input { width: 22px; height: 22px; flex: none; }
+.summary { margin-top: 10px; }
+.row .primary { flex: 2; }
