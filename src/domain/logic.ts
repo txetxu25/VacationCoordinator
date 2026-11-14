@@ -1,9 +1,13 @@
-import { CODE_HOLIDAY, CODE_NO_SCHOOL, CODE_TELEWORK } from './defaults';
+import { CODE_CARRY, CODE_HOLIDAY, CODE_NO_SCHOOL, CODE_TELEWORK, CODE_VACATION } from './defaults';
 import { daysInMonth, eachDay, isWeekend, iso, weekday } from './dates';
 import type { CellWrite, Code, Config, DayType, Grid, Person } from './types';
 
 export const findCode = (config: Config, person: Person, code: string): Code | undefined =>
   config.codes.find((c) => c.role === person.role && c.code === code);
+
+/** Para pintar una celda: si el código no es del rol de la persona, usa el de otro rol (p. ej. F en abuelos). */
+export const displayCode = (config: Config, person: Person, code: string): Code | undefined =>
+  findCode(config, person, code) ?? config.codes.find((c) => c.code === code);
 
 export const codesFor = (config: Config, person: Person) => config.codes.filter((c) => c.role === person.role);
 
@@ -57,20 +61,51 @@ export function uncoveredDays(config: Config, grid: Grid, year: number, from = '
 export interface Balance {
   code: Code;
   available: number | null;
+  /** true si "disponibles" no está tecleado sino calculado (arrastre del año anterior) */
+  auto: boolean;
   spent: number; // hasta hoy incluido
   planned: number; // a partir de mañana
   remaining: number | null;
+  /** Solo vacaciones arrastradas: último día para gastarlas y días anotados después */
+  expiry?: string;
+  late?: number;
 }
 
-export function balances(config: Config, grid: Grid, year: number, person: Person, today: string): Balance[] {
-  const cells = Object.entries(grid[person.name] ?? {}).filter(([d]) => d.startsWith(String(year)));
+/** Último día para gastar en `year` las vacaciones arrastradas del año anterior ('' = sin límite). */
+export const carryExpiry = (person: Person, year: number) =>
+  person.carryMonth ? iso(year, person.carryMonth, daysInMonth(year, person.carryMonth)) : '';
+
+/**
+ * Saldos de una persona en un año. Si se pasa la rejilla del año anterior y no hay cuota tecleada
+ * para las vacaciones arrastradas (VP), se calcula sola: lo que quedó sin gastar de V el año anterior.
+ */
+export function balances(
+  config: Config, grid: Grid, year: number, person: Person, today: string, prevGrid?: Grid,
+): Balance[] {
+  const count = (g: Grid, y: number, code: string) =>
+    Object.entries(g[person.name] ?? {}).filter(([d, c]) => d.startsWith(String(y)) && c === code);
+  const quota = (y: number, code: string) =>
+    config.quotas.find((x) => x.year === y && x.person === person.name && x.code === code)?.available ?? null;
   return codesFor(config, person).map((code) => {
-    const mine = cells.filter(([, c]) => c === code.code);
+    const mine = count(grid, year, code.code);
     const spent = mine.filter(([d]) => d <= today).length;
     const planned = mine.length - spent;
-    const q = config.quotas.find((x) => x.year === year && x.person === person.name && x.code === code.code);
-    const available = q ? q.available : null;
-    return { code, available, spent, planned, remaining: available == null ? null : available - spent - planned };
+    let available = quota(year, code.code);
+    let auto = false;
+    const b: Balance = { code, available, auto, spent, planned, remaining: null };
+    if (code.code === CODE_CARRY && person.role === 'adulto') {
+      const prevQuota = quota(year - 1, CODE_VACATION);
+      if (available == null && prevGrid && prevQuota != null) {
+        available = Math.max(0, prevQuota - count(prevGrid, year - 1, CODE_VACATION).length);
+        auto = true;
+      }
+      const expiry = carryExpiry(person, year);
+      if (expiry) {
+        b.expiry = expiry;
+        b.late = mine.filter(([d]) => d > expiry).length;
+      }
+    }
+    return { ...b, available, auto, remaining: available == null ? null : available - spent - planned };
   });
 }
 
@@ -108,8 +143,9 @@ export function specialDayWrites(config: Config, grid: Grid, year: number): Cell
     if (isWeekend(date)) continue;
     for (const p of config.people) {
       if (grid[p.name]?.[date]) continue;
-      const code = sd.type === 'festivo' ? CODE_HOLIDAY : p.role === 'niño' ? CODE_NO_SCHOOL : '';
-      if (code && findCode(config, p, code)) out.push({ person: p.name, date, code });
+      // Festivo: para todas las personas. No lectivo: solo para los niños.
+      if (sd.type === 'festivo') out.push({ person: p.name, date, code: CODE_HOLIDAY });
+      else if (p.role === 'niño' && findCode(config, p, CODE_NO_SCHOOL)) out.push({ person: p.name, date, code: CODE_NO_SCHOOL });
     }
   }
   return out;

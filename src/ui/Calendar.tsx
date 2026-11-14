@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { WEEKDAYS, daysInMonth, formatShort, isWeekend, iso, weekday } from '../domain/dates';
-import { codesFor, coverage, findCode, specialDays, uncoveredDays } from '../domain/logic';
+import { codesFor, coverage, displayCode, specialDays, uncoveredDays } from '../domain/logic';
 import type { Person } from '../domain/types';
 import type { Store } from '../store';
 import type { Run } from './App';
@@ -67,7 +67,7 @@ export function Calendar({ store, year, month, today, onGo, run }: Props) {
                 </th>
                 {config.people.map((p) => {
                   const code = grid[p.name]?.[date] ?? '';
-                  const def = code ? findCode(config, p, code) : undefined;
+                  const def = code ? displayCode(config, p, code) : undefined;
                   return (
                     <td key={p.name}>
                       <button

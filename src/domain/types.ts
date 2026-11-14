@@ -6,6 +6,8 @@ export interface Person {
   role: Role;
   /** Días de teletrabajo habituales: 1 = lunes … 5 = viernes */
   telework: number[];
+  /** Mes (1-12) hasta cuyo último día se pueden gastar las vacaciones arrastradas; 0 = sin límite */
+  carryMonth: number;
 }
 
 export interface Code {
@@ -36,11 +38,30 @@ export interface SpecialDay {
   desc: string;
 }
 
+/** Bloque de permiso por nacimiento: semanas naturales completas (7 días seguidos cada una). */
+export interface LeaveBlock {
+  person: string;
+  start: string; // ISO
+  weeks: number;
+  note: string;
+}
+
+/** Reglas del permiso por nacimiento y cuidado del menor (editables en la app). */
+export interface BirthRules {
+  birth: string; // fecha de nacimiento (prevista), ISO o ''
+  total: number; // semanas por progenitor
+  mandatory: number; // semanas seguidas obligatorias desde el nacimiento
+  months: number; // meses en los que hay que disfrutar el resto…
+  extra: number; // …salvo estas semanas, que pueden ir más tarde
+}
+
 export interface Config {
   people: Person[];
   codes: Code[];
   quotas: Quota[];
   days: SpecialDay[];
+  leaves: LeaveBlock[];
+  rules: BirthRules;
 }
 
 /** persona -> fecha ISO -> código */

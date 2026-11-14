@@ -1,9 +1,15 @@
-import type { Code, Config, SpecialDay } from './types';
+import type { BirthRules, Code, Config, SpecialDay } from './types';
 
 /** Códigos con significado fijo para la app (el resto son libres y se editan en Ajustes). */
 export const CODE_TELEWORK = 'T';
 export const CODE_HOLIDAY = 'F';
 export const CODE_NO_SCHOOL = 'VE';
+export const CODE_VACATION = 'V';
+export const CODE_CARRY = 'VP';
+export const CODE_BIRTH_LEAVE = 'PN';
+
+/** Art. 48.4 ET tras el RDL 9/2025: 19 semanas (6 obligatorias + 11 en 12 meses + 2 hasta los 8 años). */
+export const DEFAULT_RULES: BirthRules = { birth: '', total: 19, mandatory: 6, months: 12, extra: 2 };
 
 export const DEFAULT_CODES: Code[] = [
   { code: 'V', desc: 'Vacaciones', role: 'adulto', weight: 1, color: '#8fd19e' },
@@ -23,6 +29,7 @@ export const DEFAULT_CODES: Code[] = [
   { code: 'A1', desc: 'Abuelo/a 1', role: 'abuelos', weight: 1, color: '#d9c8bf' },
   { code: 'A2', desc: 'Abuelo/a 2', role: 'abuelos', weight: 1, color: '#c9b6e0' },
   { code: 'A3', desc: 'Abuelo/a 3', role: 'abuelos', weight: 1, color: '#c5d8a4' },
+  { code: 'F', desc: 'Festivo', role: 'abuelos', weight: 0, color: '#dcdcdc' },
 ];
 
 const f = (date: string, desc: string): SpecialDay => ({ from: date, to: date, type: 'festivo', desc });
@@ -54,14 +61,16 @@ export const MADRID_DAYS: SpecialDay[] = [
 export function defaultConfig(): Config {
   return {
     people: [
-      { name: 'Niño 1', role: 'niño', telework: [] },
-      { name: 'Niño 2', role: 'niño', telework: [] },
-      { name: 'Adulto 1', role: 'adulto', telework: [] },
-      { name: 'Adulto 2', role: 'adulto', telework: [] },
-      { name: 'Abuelos', role: 'abuelos', telework: [] },
+      { name: 'Niño 1', role: 'niño', telework: [], carryMonth: 0 },
+      { name: 'Niño 2', role: 'niño', telework: [], carryMonth: 0 },
+      { name: 'Adulto 1', role: 'adulto', telework: [], carryMonth: 0 },
+      { name: 'Adulto 2', role: 'adulto', telework: [], carryMonth: 0 },
+      { name: 'Abuelos', role: 'abuelos', telework: [], carryMonth: 0 },
     ],
     codes: DEFAULT_CODES.map((c) => ({ ...c })),
     quotas: [],
     days: MADRID_DAYS.map((d) => ({ ...d })),
+    leaves: [],
+    rules: { ...DEFAULT_RULES },
   };
 }

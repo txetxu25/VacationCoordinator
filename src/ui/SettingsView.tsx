@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { MONTHS } from '../domain/dates';
 import { teleworkToText, textToTelework } from '../domain/sheet';
 import { type Code, type Person, ROLES, type Role, type SpecialDay } from '../domain/types';
 import type { Store } from '../store';
 import type { Run } from './App';
+import { useUnsaved } from './dirty';
 
 interface Props {
   store: Store;
@@ -22,6 +24,7 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
   const [codes, setCodes] = useState<Code[]>(() => store.config.codes.map((c) => ({ ...c })));
   const [days, setDays] = useState<SpecialDay[]>(() => store.config.days.map((d) => ({ ...d })));
   const [dirty, setDirty] = useState(false);
+  useUnsaved(dirty);
 
   const edit = <T,>(list: T[], set: (l: T[]) => void, i: number, patch: Partial<T>) => {
     set(list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
@@ -44,7 +47,9 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
       await store.saveConfig(
         {
           ...store.config,
-          people: people.map((p) => ({ name: p.name.trim(), role: p.role, telework: textToTelework(p.tw) })),
+          people: people.map((p) => ({
+            name: p.name.trim(), role: p.role, telework: textToTelework(p.tw), carryMonth: p.role === 'adulto' ? p.carryMonth : 0,
+          })),
           codes: codes.filter((c) => c.code.trim()).map((c) => ({ ...c, code: c.code.trim() })),
           days: days.filter((d) => d.from).map((d) => ({ ...d, to: d.to && d.to >= d.from ? d.to : d.from })),
         },
@@ -67,10 +72,11 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
     <div className="cards">
       <section className="card">
         <h2>Personas</h2>
-        <p className="muted">Teletrabajo: días habituales con letras L, M, X, J, V separadas por comas.</p>
+        <p className="muted">Teletrabajo: días habituales con letras L, M, X, J, V separadas por comas. Las vacaciones que sobran de un año
+          pasan solas al siguiente como VP y se pueden gastar hasta el mes indicado.</p>
         <table className="edit">
           <thead>
-            <tr><th>Nombre</th><th>Rol</th><th>Teletrabajo</th><th /></tr>
+            <tr><th>Nombre</th><th>Rol</th><th>Teletrabajo</th><th>Vac. año anterior hasta</th><th /></tr>
           </thead>
           <tbody>
             {people.map((p, i) => (
@@ -82,12 +88,22 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
                     <input aria-label="Teletrabajo" value={p.tw} placeholder="M,V" onChange={(e) => edit(people, setPeople, i, { tw: e.target.value })} />
                   )}
                 </td>
+                <td>
+                  {p.role === 'adulto' && (
+                    <select aria-label={`Límite vacaciones año anterior ${p.name}`} value={p.carryMonth} onChange={(e) => edit(people, setPeople, i, { carryMonth: +e.target.value })}>
+                      <option value={0}>Sin límite</option>
+                      {MONTHS.map((m, k) => (
+                        <option key={m} value={k + 1}>Fin de {m.toLowerCase()}</option>
+                      ))}
+                    </select>
+                  )}
+                </td>
                 <td><button aria-label={`Quitar ${p.name}`} onClick={() => remove(people, setPeople, i)}>✕</button></td>
               </tr>
             ))}
           </tbody>
         </table>
-        <button onClick={() => { setPeople([...people, { name: '', role: 'niño', telework: [], orig: '', tw: '' }]); setDirty(true); }}>
+        <button onClick={() => { setPeople([...people, { name: '', role: 'niño', telework: [], carryMonth: 0, orig: '', tw: '' }]); setDirty(true); }}>
           Añadir persona
         </button>
       </section>
@@ -173,7 +189,7 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
       <section className="card">
         <h2>Conexión</h2>
         {store.legacy.length > 0 && (
-          <p className="muted">Hojas con formato antiguo (histórico, no se modifican): {store.legacy.join(', ')}.</p>
+          <p className="muted">Hojas con formato antiguo: {store.legacy.join(', ')}. Para editarlas desde la app, ve a ese año en Calendario e impórtalo.</p>
         )}
         <button onClick={onDisconnect}>Desconectar / cambiar de hoja</button>
       </section>

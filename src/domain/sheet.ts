@@ -6,11 +6,14 @@
  *   después: un bloque por mes con una fila por persona; cada celda, un código.
  *   A partir de la columna AI hay un resumen con fórmulas (solo lectura para la app).
  *
- * Hoja "Config": cuatro tablas, una al lado de otra, con cabecera en la fila 1.
- *   A-C personas · E-I códigos · K-N cuotas · P-S días especiales
+ * Hoja "Config": seis tablas, una al lado de otra, con cabecera en la fila 1.
+ *   A-D personas · E-I códigos · K-N cuotas · P-S días especiales · U-X permiso por nacimiento · Y-Z ajustes
  */
 import { MONTHS, WEEKDAYS, daysInMonth, iso, parseDate } from './dates';
-import type { Code, Config, DayType, Grid, Person, Quota, Role, SpecialDay } from './types';
+import { DEFAULT_RULES } from './defaults';
+import type {
+  BirthRules, Code, Config, DayType, Grid, LeaveBlock, Person, Quota, Role, SpecialDay,
+} from './types';
 
 export const YEAR_HEADER = ['Mes', 'Persona'];
 export const GRID_COLS = 33; // A..AG
@@ -106,30 +109,53 @@ export const textToTelework = (s: string) =>
     .filter((d) => d >= 1 && d <= 5)
     .sort();
 
+/** Columna inicial de cada tabla de la hoja Config (todas caben en A..Z). */
+const COL = { people: 0, codes: 4, quotas: 10, days: 15, leaves: 20, rules: 24 };
+
+const RULE_KEYS: [keyof BirthRules, string][] = [
+  ['birth', 'Nacimiento'],
+  ['total', 'PN semanas'],
+  ['mandatory', 'PN obligatorias'],
+  ['months', 'PN meses'],
+  ['extra', 'PN semanas posteriores'],
+];
+
 export function serializeConfig(c: Config): string[][] {
-  const blocks: string[][][] = [
-    [['Persona', 'Rol', 'Teletrabajo'], ...c.people.map((p) => [p.name, p.role, teleworkToText(p.telework)])],
+  const blocks: [number, string[][]][] = [
     [
-      ['Código', 'Descripción', 'Rol', 'Cobertura', 'Color'],
-      ...c.codes.map((x) => [x.code, x.desc, x.role, String(x.weight), x.color]),
+      COL.people,
+      [
+        ['Persona', 'Rol', 'Teletrabajo', 'VP hasta mes'],
+        ...c.people.map((p) => [p.name, p.role, teleworkToText(p.telework), p.carryMonth ? String(p.carryMonth) : '']),
+      ],
     ],
     [
-      ['Año', 'Persona', 'Código', 'Disponibles'],
-      ...c.quotas.map((x) => [String(x.year), x.person, x.code, String(x.available)]),
+      COL.codes,
+      [
+        ['Código', 'Descripción', 'Rol', 'Cobertura', 'Color'],
+        ...c.codes.map((x) => [x.code, x.desc, x.role, String(x.weight), x.color]),
+      ],
     ],
-    [['Desde', 'Hasta', 'Tipo', 'Descripción'], ...c.days.map((d) => [d.from, d.to, d.type, d.desc])],
+    [
+      COL.quotas,
+      [
+        ['Año', 'Persona', 'Código', 'Disponibles'],
+        ...c.quotas.map((x) => [String(x.year), x.person, x.code, String(x.available)]),
+      ],
+    ],
+    [COL.days, [['Desde', 'Hasta', 'Tipo', 'Descripción'], ...c.days.map((d) => [d.from, d.to, d.type, d.desc])]],
+    [
+      COL.leaves,
+      [
+        ['PN persona', 'PN inicio', 'PN semanas', 'PN nota'],
+        ...c.leaves.map((l) => [l.person, l.start, String(l.weeks), l.note]),
+      ],
+    ],
+    [COL.rules, [['Ajuste', 'Valor'], ...RULE_KEYS.map(([k, label]) => [label, String(c.rules[k])])]],
   ];
-  const height = Math.max(...blocks.map((b) => b.length));
-  const out: string[][] = [];
-  for (let r = 0; r < height; r++) {
-    const row: string[] = [];
-    blocks.forEach((b, i) => {
-      const width = b[0].length;
-      row.push(...(b[r] ?? Array(width).fill('')));
-      if (i < blocks.length - 1) row.push('');
-    });
-    out.push(row);
-  }
+  const height = Math.max(...blocks.map(([, b]) => b.length));
+  const out: string[][] = Array.from({ length: height }, () => Array(COL.rules + 2).fill(''));
+  for (const [col, block] of blocks) block.forEach((row, r) => row.forEach((v, i) => (out[r][col + i] = v)));
   return out;
 }
 
@@ -138,9 +164,17 @@ export function parseConfig(values: string[][]): Config {
   const codes: Code[] = [];
   const quotas: Quota[] = [];
   const days: SpecialDay[] = [];
+  const leaves: LeaveBlock[] = [];
+  const rules: BirthRules = { ...DEFAULT_RULES };
   for (const raw of values.slice(1)) {
     const v = (i: number) => (raw[i] ?? '').trim();
-    if (v(0)) people.push({ name: v(0), role: parseRole(v(1)), telework: textToTelework(v(2)) });
+    if (v(0)) {
+      const cm = parseNum(v(3));
+      people.push({
+        name: v(0), role: parseRole(v(1)), telework: textToTelework(v(2)),
+        carryMonth: Number.isInteger(cm) && cm >= 1 && cm <= 12 ? cm : 0,
+      });
+    }
     if (v(4)) {
       const w = parseNum(v(7));
       codes.push({
@@ -159,6 +193,14 @@ export function parseConfig(values: string[][]): Config {
       const type: DayType = norm(v(17)).startsWith('no') ? 'no lectivo' : 'festivo';
       days.push({ from, to: parseDate(v(16)) ?? from, type, desc: v(18) });
     }
+    const start = parseDate(v(21));
+    const weeks = parseNum(v(22));
+    if (v(20) && start && weeks > 0) leaves.push({ person: v(20), start, weeks: Math.round(weeks), note: v(23) });
+    const rule = RULE_KEYS.find(([, label]) => norm(label) === norm(v(24)));
+    if (rule) {
+      if (rule[0] === 'birth') rules.birth = parseDate(v(25)) ?? '';
+      else if (v(25) !== '' && Number.isFinite(parseNum(v(25)))) rules[rule[0]] = parseNum(v(25));
+    }
   }
-  return { people, codes, quotas, days };
+  return { people, codes, quotas, days, leaves, rules };
 }

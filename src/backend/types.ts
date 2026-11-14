@@ -16,6 +16,7 @@ export interface YearFormat {
 export interface Backend {
   listSheets(): Promise<string[]>;
   addSheet(title: string, rows: number, cols: number): Promise<void>;
+  renameSheet(from: string, to: string): Promise<void>;
   /** Todos los valores de la hoja, como texto. */
   read(sheet: string): Promise<string[][]>;
   /** Vacía la hoja y escribe desde A1. Los valores que empiezan por "=" son fórmulas. */
