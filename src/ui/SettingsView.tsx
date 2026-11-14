@@ -4,6 +4,7 @@ import { teleworkToText, textToTelework } from '../domain/sheet';
 import { type Code, type Person, ROLES, type Role, type SpecialDay } from '../domain/types';
 import type { Store } from '../store';
 import type { Run } from './App';
+import { LegacyImport } from './LegacyImport';
 import { useUnsaved } from './dirty';
 
 interface Props {
@@ -144,7 +145,10 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
 
       <section className="card">
         <h2>Festivos y días no lectivos</h2>
-        <p className="muted">Precargado con Madrid capital 2027. Revisa los marcados como «sin confirmar».</p>
+        <p className="muted">
+          Al guardar, los festivos se anotan como F para todas las personas en los días que tengan vacíos. Revisa los
+          marcados como «sin confirmar».
+        </p>
         <table className="edit">
           <thead>
             <tr><th>Desde</th><th>Hasta</th><th>Tipo</th><th>Descripción</th><th /></tr>
@@ -169,6 +173,11 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
         <button onClick={() => { setDays([...days, { from: '', to: '', type: 'no lectivo', desc: '' }]); setDirty(true); }}>
           Añadir día
         </button>
+        {store.missingMadridDays(year, days).length > 0 && (
+          <button onClick={() => { setDays([...days, ...store.missingMadridDays(year, days)]); setDirty(true); }}>
+            Añadir festivos de Madrid de {year}
+          </button>
+        )}
       </section>
 
       <button className="primary" disabled={!dirty || busy} onClick={save}>
@@ -185,6 +194,12 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
           Rellenar festivos y no lectivos
         </button>
       </section>
+
+      {store.originals
+        .filter((t) => store.years.includes(parseInt(t, 10)))
+        .map((t) => (
+          <LegacyImport key={t} store={store} source={t} run={run} busy={busy || dirty} />
+        ))}
 
       <section className="card">
         <h2>Conexión</h2>

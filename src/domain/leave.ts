@@ -1,71 +1,124 @@
 /**
- * Planificador del permiso por nacimiento y cuidado del menor.
- * Se planifica en bloques de semanas naturales completas: cada semana son 7 días seguidos
- * (fines de semana y festivos incluidos), no días laborables sueltos.
+ * Planificador de permisos (nacimiento y los que tenga cada empresa).
+ * Cada persona tiene sus propios permisos, con su duración, unidad y código de calendario.
+ * Un permiso en semanas se planifica en semanas naturales completas: 7 días seguidos desde
+ * el día de inicio, sea cual sea (p. ej. de jueves a miércoles).
  */
-import { CODE_BIRTH_LEAVE } from './defaults';
 import { addDays, addMonths, eachDay, formatLong, isWeekend } from './dates';
-import type { BirthRules, CellWrite, Grid, LeaveBlock } from './types';
+import type { CellWrite, Grid, LeaveBlock, LeaveType } from './types';
 
-export const blockEnd = (b: LeaveBlock) => addDays(b.start, 7 * b.weeks - 1);
+export interface Plan {
+  types: LeaveType[];
+  blocks: LeaveBlock[];
+}
+export type IsHoliday = (date: string) => boolean;
 
-const valid = (b: LeaveBlock) => !!b.start && b.weeks > 0;
+const noHoliday: IsHoliday = () => false;
 
-/** Todos los días naturales de permiso de una persona. */
-export function leaveDays(blocks: LeaveBlock[], person: string): Set<string> {
-  const days = new Set<string>();
-  for (const b of blocks) if (b.person === person && valid(b)) for (const d of eachDay(b.start, blockEnd(b))) days.add(d);
+/** Días que ocupa un bloque: naturales, o solo laborables si el permiso va en días laborables. */
+export function blockDates(b: LeaveBlock, t: LeaveType, isHoliday: IsHoliday = noHoliday): string[] {
+  if (!b.start || !(b.amount > 0)) return [];
+  if (t.unit === 'días laborables') {
+    const out: string[] = [];
+    for (let d = b.start; out.length < Math.ceil(b.amount) && out.length < 400; d = addDays(d, 1)) {
+      if (!isWeekend(d) && !isHoliday(d)) out.push(d);
+      if (d > addDays(b.start, 800)) break;
+    }
+    return out;
+  }
+  const n = Math.ceil(t.unit === 'semanas' ? b.amount * 7 : b.amount);
+  return eachDay(b.start, addDays(b.start, n - 1));
+}
+
+export const blockEnd = (b: LeaveBlock, t: LeaveType, isHoliday?: IsHoliday) => blockDates(b, t, isHoliday).pop() ?? b.start;
+
+/** Lo que consume un bloque de la duración del permiso: a media jornada, la mitad. */
+export const blockUse = (b: LeaveBlock) => (b.half ? b.amount / 2 : b.amount);
+
+const typeOf = (plan: Plan, b: LeaveBlock) => plan.types.find((t) => t.person === b.person && t.name === b.type);
+
+/** fecha -> código de calendario, para todos los permisos de una persona. */
+export function planDays(plan: Plan, person: string, isHoliday?: IsHoliday): Map<string, string> {
+  const days = new Map<string, string>();
+  for (const b of plan.blocks) {
+    const t = b.person === person ? typeOf(plan, b) : undefined;
+    if (!t) continue;
+    const code = b.half && t.halfCode ? t.halfCode : t.code;
+    for (const d of blockDates(b, t, isHoliday)) days.set(d, code);
+  }
   return days;
 }
 
+/** ¿Se pisan entre sí los bloques de una persona? */
+export function hasOverlap(plan: Plan, person: string, isHoliday?: IsHoliday): boolean {
+  let total = 0;
+  for (const b of plan.blocks) {
+    const t = b.person === person ? typeOf(plan, b) : undefined;
+    if (t) total += blockDates(b, t, isHoliday).length;
+  }
+  return total !== planDays(plan, person, isHoliday).size;
+}
+
 export interface LeaveAnalysis {
-  used: number; // semanas planificadas
+  used: number;
   remaining: number;
   warnings: string[];
 }
 
-export function analyzeLeave(rules: BirthRules, blocks: LeaveBlock[], person: string): LeaveAnalysis {
-  const mine = blocks.filter((b) => b.person === person && valid(b));
-  const used = mine.reduce((n, b) => n + b.weeks, 0);
-  const days = leaveDays(mine, person);
+export function analyzeLeave(birth: string, t: LeaveType, blocks: LeaveBlock[], isHoliday?: IsHoliday): LeaveAnalysis {
+  const mine = blocks.filter((b) => b.person === t.person && b.type === t.name && b.start && b.amount > 0);
+  const used = mine.reduce((n, b) => n + blockUse(b), 0);
   const warnings: string[] = [];
-  if (used > rules.total) warnings.push(`Hay ${used} semanas planificadas y el máximo es ${rules.total}.`);
-  if (days.size !== used * 7) warnings.push('Hay bloques que se solapan entre sí.');
-  if (rules.birth && used > 0) {
-    let run = 0;
-    while (days.has(addDays(rules.birth, run))) run++;
-    if (run < rules.mandatory * 7)
-      warnings.push(
-        `Las ${rules.mandatory} primeras semanas son obligatorias y seguidas desde el nacimiento (${formatLong(rules.birth)}).`,
-      );
-    if ([...days].some((d) => d < rules.birth)) warnings.push('Hay semanas antes de la fecha de nacimiento.');
-    const limit = addMonths(rules.birth, rules.months);
-    const late = [...days].filter((d) => d >= limit).length / 7;
-    if (late > rules.extra)
-      warnings.push(
-        `Hay ${Math.ceil(late)} semanas después de los ${rules.months} meses (${formatLong(limit)}); solo ${rules.extra} pueden ir más tarde.`,
-      );
+  if (used > t.amount) warnings.push(`Lo planificado suma ${fmt(used)} ${t.unit} y el máximo es ${fmt(t.amount)}.`);
+  if (mine.some((b) => b.half) && !t.halfCode) warnings.push('Hay bloques a media jornada y este permiso no tiene código de media jornada.');
+  const birthRules = t.mandatory > 0 || t.months > 0;
+  if (birth && birthRules && used > 0) {
+    const perUnit = t.unit === 'semanas' ? 7 : 1;
+    const days = new Set(mine.flatMap((b) => blockDates(b, t, isHoliday)));
+    if (t.mandatory > 0 && t.unit !== 'días laborables') {
+      const full = new Set(mine.filter((b) => !b.half).flatMap((b) => blockDates(b, t, isHoliday)));
+      let run = 0;
+      while (full.has(addDays(birth, run))) run++;
+      if (run < t.mandatory * perUnit)
+        warnings.push(
+          `Las ${fmt(t.mandatory)} primeras ${t.unit} son obligatorias, seguidas y a jornada completa desde el nacimiento (${formatLong(birth)}).`,
+        );
+    }
+    if ([...days].some((d) => d < birth)) warnings.push('Hay días antes de la fecha de nacimiento.');
+    if (t.months > 0) {
+      const limit = addMonths(birth, t.months);
+      const late = mine.reduce((n, b) => {
+        const dates = blockDates(b, t, isHoliday);
+        return n + (dates.length ? (dates.filter((d) => d >= limit).length / dates.length) * blockUse(b) : 0);
+      }, 0);
+      if (late > t.extra + 1e-9)
+        warnings.push(
+          `Hay ${fmt(late)} ${t.unit} después de los ${t.months} meses (${formatLong(limit)}); solo ${fmt(t.extra)} pueden ir más tarde.`,
+        );
+    }
   }
-  return { used, remaining: rules.total - used, warnings };
+  return { used, remaining: t.amount - used, warnings };
 }
 
+export const fmt = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',');
+
 /**
- * Cambios en la rejilla al pasar de un plan a otro: PN en los laborables de los bloques nuevos
- * y vaciar los PN que ya no pertenecen a ningún bloque.
+ * Cambios en la rejilla al pasar de un plan a otro: anota el código de cada permiso en los
+ * laborables de sus bloques y vacía lo que el plan anterior había anotado y ya no corresponde.
  */
 export function leaveWrites(
-  people: string[], before: LeaveBlock[], after: LeaveBlock[], gridOf: (year: number) => Grid,
+  people: string[], before: Plan, after: Plan, gridOf: (year: number) => Grid, isHoliday?: IsHoliday,
 ): CellWrite[] {
   const out: CellWrite[] = [];
   for (const person of people) {
-    const oldDays = leaveDays(before, person);
-    const newDays = leaveDays(after, person);
+    const oldDays = planDays(before, person, isHoliday);
+    const newDays = planDays(after, person, isHoliday);
     const cell = (d: string) => gridOf(+d.slice(0, 4))[person]?.[d];
-    for (const d of newDays) {
-      if (!isWeekend(d) && cell(d) !== CODE_BIRTH_LEAVE) out.push({ person, date: d, code: CODE_BIRTH_LEAVE });
+    for (const [d, code] of newDays) {
+      if (code && !isWeekend(d) && cell(d) !== code) out.push({ person, date: d, code });
     }
-    for (const d of oldDays) {
-      if (!newDays.has(d) && cell(d) === CODE_BIRTH_LEAVE) out.push({ person, date: d, code: '' });
+    for (const [d, code] of oldDays) {
+      if (!newDays.has(d) && code && cell(d) === code) out.push({ person, date: d, code: '' });
     }
   }
   return out;
@@ -78,13 +131,13 @@ export interface TimelineWeek {
 }
 
 /** Semanas desde el nacimiento, para ver de un vistazo solapes y huecos entre progenitores. */
-export function timeline(rules: BirthRules, blocks: LeaveBlock[], people: string[]): TimelineWeek[] {
-  if (!rules.birth) return [];
-  const sets = people.map((p) => leaveDays(blocks, p));
-  let last = addMonths(rules.birth, rules.months);
-  for (const s of sets) for (const d of s) if (d > last) last = d;
+export function timeline(birth: string, plan: Plan, people: string[], isHoliday?: IsHoliday, months = 12): TimelineWeek[] {
+  if (!birth) return [];
+  const sets = people.map((p) => planDays(plan, p, isHoliday));
+  let last = addMonths(birth, months);
+  for (const s of sets) for (const d of s.keys()) if (d > last) last = d;
   const weeks: TimelineWeek[] = [];
-  for (let start = rules.birth; start <= last && weeks.length < 110; start = addDays(start, 7)) {
+  for (let start = birth; start <= last && weeks.length < 110; start = addDays(start, 7)) {
     const span = eachDay(start, addDays(start, 6));
     weeks.push({ start, on: sets.map((s) => span.filter((d) => s.has(d)).length >= 4) });
   }

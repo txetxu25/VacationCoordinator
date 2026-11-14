@@ -2,14 +2,18 @@ import type { Backend } from './backend/types';
 import { defaultConfig } from './domain/defaults';
 import { parts } from './domain/dates';
 import { type Legacy, parseLegacy } from './domain/legacy';
-import { leaveWrites } from './domain/leave';
-import { rangeWrites, specialDayWrites, teleworkWrites } from './domain/logic';
+import { madridDays } from './domain/defaults';
+import { type Plan, leaveWrites } from './domain/leave';
+import { holidayChecker, rangeWrites, specialDayWrites, teleworkWrites } from './domain/logic';
 import {
-  SUMMARY_COL, type YearData, buildYear, isAppYearSheet, parseConfig, parseYear, serializeConfig,
+  SUMMARY_COL, type YearData, buildYear, isAppYearSheet, parseConfig, parseLeaves, parseYear, serializeConfig,
+  serializeLeaves,
 } from './domain/sheet';
-import type { BirthRules, CellWrite, Config, Grid, LeaveBlock, Person } from './domain/types';
+import type { CellWrite, Config, Grid, LeaveBlock, LeaveType, Person } from './domain/types';
 
 const CONFIG_SHEET = 'Config';
+const LEAVE_SHEET = 'Permisos';
+const ORIGINAL = /^(\d{4}) original$/;
 const isYearTitle = (t: string) => /^\d{4}$/.test(t);
 
 /** Estado de la app; toda la información vive en la hoja de cálculo. */
@@ -19,6 +23,9 @@ export class Store {
   years: number[] = [];
   /** Hojas de año con formato antiguo (histórico, no se tocan) */
   legacy: string[] = [];
+  /** Hojas "<año> original" que quedaron tras importar: se puede volver a importar de ellas */
+  originals: string[] = [];
+  private hasLeaveSheet = false;
   private data = new Map<number, YearData>();
   /** Aviso no bloqueante (p. ej. si falla el formato de colores) */
   warning = '';
@@ -27,8 +34,10 @@ export class Store {
 
   async init() {
     const sheets = await this.be.listSheets();
+    this.hasLeaveSheet = sheets.includes(LEAVE_SHEET);
+    this.originals = sheets.filter((t) => ORIGINAL.test(t));
     if (sheets.includes(CONFIG_SHEET)) {
-      this.config = parseConfig(await this.be.read(CONFIG_SHEET));
+      await this.readConfig();
     } else {
       this.config = defaultConfig();
       await this.be.addSheet(CONFIG_SHEET, 200, 26);
@@ -45,6 +54,28 @@ export class Store {
       } else this.legacy.push(title);
     }
     this.years.sort();
+    await this.healHolidays();
+  }
+
+  /** Festivos que falten (hojas de versiones anteriores, personas nuevas…): se completan solos. */
+  private async healHolidays() {
+    for (const year of this.years) {
+      const missing = specialDayWrites(this.config, this.grid(year), year, 'festivo');
+      if (missing.length) await this.setCells(missing);
+    }
+  }
+
+  private async readConfig() {
+    this.config = parseConfig(await this.be.read(CONFIG_SHEET));
+    if (this.hasLeaveSheet) Object.assign(this.config, parseLeaves(await this.be.read(LEAVE_SHEET)));
+  }
+
+  private get plan(): Plan {
+    return { types: this.config.leaveTypes, blocks: this.config.leaves };
+  }
+
+  private get adults() {
+    return this.config.people.filter((p) => p.role === 'adulto').map((p) => p.name);
   }
 
   grid(year: number): Grid {
@@ -53,7 +84,7 @@ export class Store {
 
   /** Vuelve a leer configuración y año (por si la otra persona ha cambiado algo). */
   async refresh(year: number) {
-    this.config = parseConfig(await this.be.read(CONFIG_SHEET));
+    await this.readConfig();
     if (this.years.includes(year)) await this.loadYear(year);
   }
 
@@ -68,8 +99,8 @@ export class Store {
     await this.be.addSheet(title, 12 * this.config.people.length + 60, SUMMARY_COL + 6);
     const grid: Grid = {};
     for (const w of specialDayWrites(this.config, grid, year)) (grid[w.person] ??= {})[w.date] = w.code;
-    const adults = this.config.people.filter((p) => p.role === 'adulto').map((p) => p.name);
-    for (const w of leaveWrites(adults, [], this.config.leaves, () => grid)) {
+    const none: Plan = { types: [], blocks: [] };
+    for (const w of leaveWrites(this.adults, none, this.plan, () => grid, holidayChecker(this.config))) {
       if (w.date.startsWith(title)) (grid[w.person] ??= {})[w.date] = w.code;
     }
     await this.writeYear(year, grid);
@@ -77,28 +108,45 @@ export class Store {
   }
 
   /** Lee una hoja con formato antiguo, sin modificarla. */
-  async readLegacy(title: string): Promise<Legacy> {
-    return parseLegacy(await this.be.read(title), +title);
+  async readLegacy(source: string): Promise<Legacy> {
+    return parseLegacy(await this.be.read(source), parseInt(source, 10));
   }
 
   /**
-   * Pasa un año con formato antiguo al formato de la app. La hoja original no se pierde:
-   * se renombra a "<año> original" y se crea una nueva con los mismos datos.
+   * Pasa un año con formato antiguo al formato de la app.
    * `mapping`: nombre antiguo -> persona de la app ('' = no importar).
+   * - Si `source` es la hoja del año ("2026"), no se pierde: se renombra a "2026 original" y se
+   *   crea una nueva con los mismos datos.
+   * - Si `source` es "2026 original" y el año ya está en la app, se completan las celdas vacías
+   *   (sirve para traer filas que se quedaron sin asignar la primera vez).
    */
-  async importLegacy(title: string, mapping: Record<string, string>) {
-    const year = +title;
-    const legacy = await this.readLegacy(title);
+  async importLegacy(source: string, mapping: Record<string, string>) {
+    const year = parseInt(source, 10);
+    const legacy = await this.readLegacy(source);
+    const merging = this.years.includes(year);
+    if (merging) await this.loadYear(year);
     const grid: Grid = {};
+    for (const [person, cells] of Object.entries(this.grid(year))) grid[person] = { ...cells };
     for (const [old, cells] of Object.entries(legacy.grid)) {
       const target = mapping[old];
-      if (target && this.config.people.some((p) => p.name === target)) grid[target] = { ...grid[target], ...cells };
+      if (!target || !this.config.people.some((p) => p.name === target)) continue;
+      // lo ya anotado en la app manda sobre la hoja antigua
+      grid[target] = { ...cells, ...grid[target] };
     }
-    await this.be.renameSheet(title, `${title} original`);
-    await this.be.addSheet(title, 12 * this.config.people.length + 60, SUMMARY_COL + 6);
+    this.fillHolidays(grid, year);
+    if (!merging) {
+      await this.be.renameSheet(source, `${source} original`);
+      await this.be.addSheet(source, 12 * this.config.people.length + 60, SUMMARY_COL + 6);
+      this.legacy = this.legacy.filter((t) => t !== source);
+      this.originals = [...this.originals, `${source} original`];
+      this.years = [...this.years, year].sort();
+    }
     await this.writeYear(year, grid);
-    this.legacy = this.legacy.filter((t) => t !== title);
-    this.years = [...this.years, year].sort();
+  }
+
+  /** Pone F en los laborables festivos que estén vacíos, para todas las personas. */
+  private fillHolidays(grid: Grid, year: number) {
+    for (const w of specialDayWrites(this.config, grid, year, 'festivo')) (grid[w.person] ??= {})[w.date] = w.code;
   }
 
   private async writeYear(year: number, grid: Grid) {
@@ -147,12 +195,28 @@ export class Store {
     return this.setCells(specialDayWrites(this.config, this.grid(year), year));
   }
 
-  /** Guarda el plan de permiso por nacimiento y lo refleja en las hojas de año (código PN). */
-  async saveLeaves(leaves: LeaveBlock[], rules: BirthRules) {
-    const adults = this.config.people.filter((p) => p.role === 'adulto').map((p) => p.name);
-    const writes = leaveWrites(adults, this.config.leaves, leaves, (y) => this.grid(y));
-    await this.saveConfigOnly({ ...this.config, leaves, rules });
+  /** Guarda los permisos y su planificación, y los refleja en las hojas de año. */
+  async saveLeaves(leaveTypes: LeaveType[], leaves: LeaveBlock[], birth: string) {
+    const after: Plan = { types: leaveTypes, blocks: leaves };
+    const writes = leaveWrites(this.adults, this.plan, after, (y) => this.grid(y), holidayChecker(this.config));
+    await this.saveConfigOnly({ ...this.config, leaveTypes, leaves, birth });
+    await this.writeLeaveSheet();
     await this.setCells(writes);
+    await this.healHolidays(); // un festivo que queda libre al mover un permiso vuelve a ser F
+  }
+
+  private async writeLeaveSheet() {
+    if (!this.hasLeaveSheet) {
+      if (!this.config.leaveTypes.length && !this.config.leaves.length) return;
+      await this.be.addSheet(LEAVE_SHEET, 200, 20);
+      this.hasLeaveSheet = true;
+    }
+    await this.be.replace(LEAVE_SHEET, serializeLeaves(this.config));
+  }
+
+  /** Festivos y no lectivos precargados de Madrid para un año que aún no estén en la tabla. */
+  missingMadridDays(year: number, current = this.config.days) {
+    return madridDays(year).filter((d) => !current.some((c) => c.from === d.from && c.type === d.type));
   }
 
   /** Guarda solo cuotas / días: no cambia la estructura de las hojas de año. */
@@ -174,15 +238,18 @@ export class Store {
     config = {
       ...config,
       quotas: config.quotas.map((q) => ({ ...q, person: rn(q.person) })).filter((q) => names.has(q.person)),
+      leaveTypes: config.leaveTypes.map((t) => ({ ...t, person: rn(t.person) })).filter((t) => names.has(t.person)),
       leaves: config.leaves.map((l) => ({ ...l, person: rn(l.person) })).filter((l) => names.has(l.person)),
     };
     await this.saveConfigOnly(config);
+    await this.writeLeaveSheet();
     for (const year of this.years) {
       await this.loadYear(year); // por si hay cambios de la otra persona
       const grid: Grid = {};
       for (const [person, cells] of Object.entries(this.grid(year))) {
         if (names.has(rn(person))) grid[rn(person)] = cells;
       }
+      this.fillHolidays(grid, year); // también para personas recién añadidas y festivos nuevos
       await this.writeYear(year, grid);
     }
   }

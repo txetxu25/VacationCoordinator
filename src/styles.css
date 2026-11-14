@@ -128,3 +128,12 @@ p.neg { color: var(--danger); }
 .tl span.one { background: #8fd19e; }
 .tl span.both { background: #2e9e5b; }
 .tl span.none { background: #f2a09c; }
+
+.ltype { border-top: 1px solid var(--line); padding: 10px 0; }
+.ltype p { margin: 6px 0; }
+.lhead { display: flex; gap: 6px; }
+.lhead input { font-weight: 600; }
+.edit input[type='checkbox'] { width: 22px; height: 22px; }
+.ltype .edit input[type='date'] { width: 8.6em; padding: 6px 4px; font-size: 0.85rem; }
+.ltype .edit td.end { font-size: 0.72rem; white-space: normal; padding: 0 2px; line-height: 1.1; }
+.ltype .edit input.short { width: 3em; }

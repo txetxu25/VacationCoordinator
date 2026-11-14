@@ -3,17 +3,22 @@ import { guessMapping } from '../domain/legacy';
 import type { Store } from '../store';
 import type { Run } from './App';
 
-/** Pasa una hoja de año rellenada a mano al formato de la app, para poder editarla desde aquí. */
-export function LegacyImport({ store, title, run, busy }: { store: Store; title: string; run: Run; busy: boolean }) {
+/**
+ * Pasa una hoja de año rellenada a mano al formato de la app.
+ * `source` es la hoja antigua: "2026" (primera importación) o "2026 original" (traer lo que faltó).
+ */
+export function LegacyImport({ store, source, run, busy }: { store: Store; source: string; run: Run; busy: boolean }) {
   const [names, setNames] = useState<string[] | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
+  const year = parseInt(source, 10);
+  const merging = store.years.includes(year);
   const people = store.config.people.map((p) => p.name);
 
   useEffect(() => {
     let alive = true;
     setNames(null);
-    store.readLegacy(title).then(
+    store.readLegacy(source).then(
       (l) => {
         if (!alive) return;
         setNames(l.people);
@@ -24,20 +29,23 @@ export function LegacyImport({ store, title, run, busy }: { store: Store; title:
     return () => {
       alive = false;
     };
-  }, [store, title]);
+  }, [store, source]);
 
   if (error) return <p className="error">{error}</p>;
-  if (!names) return <p>Leyendo la hoja {title}…</p>;
+  if (!names) return <p>Leyendo la hoja {source}…</p>;
 
   const targets = Object.values(mapping).filter(Boolean);
   const duplicated = new Set(targets).size !== targets.length;
+  const unassigned = names.filter((n) => !mapping[n]);
 
   return (
     <section className="card import">
-      <h2>Importar {title} a la app</h2>
+      <h2>{merging ? `Completar ${year} desde «${source}»` : `Importar ${year} a la app`}</h2>
       <p className="muted">
-        Indica a quién corresponde cada fila de la hoja antigua. La hoja actual se conserva con el nombre «{title}{' '}
-        original» y se crea una nueva «{title}» con los mismos datos, editable desde la app.
+        Indica a quién corresponde cada fila de la hoja antigua.{' '}
+        {merging
+          ? 'Solo se rellenan las celdas que estén vacías en la app; lo ya anotado no se toca.'
+          : `La hoja actual se conserva con el nombre «${source} original» y se crea una nueva «${source}» con los mismos datos, editable desde la app.`}
       </p>
       <table className="edit">
         <thead>
@@ -60,12 +68,15 @@ export function LegacyImport({ store, title, run, busy }: { store: Store; title:
         </tbody>
       </table>
       {duplicated && <p className="error">Hay dos filas asignadas a la misma persona.</p>}
+      {unassigned.length > 0 && (
+        <p className="warn inline">Sin asignar, no se importarán: {unassigned.join(', ')}.</p>
+      )}
       <button
         className="primary"
         disabled={busy || duplicated || targets.length === 0}
-        onClick={() => run(() => store.importLegacy(title, mapping))}
+        onClick={() => run(() => store.importLegacy(source, mapping))}
       >
-        Importar {title}
+        {merging ? `Completar ${year}` : `Importar ${year}`}
       </button>
     </section>
   );

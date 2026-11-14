@@ -38,21 +38,34 @@ export interface SpecialDay {
   desc: string;
 }
 
-/** Bloque de permiso por nacimiento: semanas naturales completas (7 días seguidos cada una). */
-export interface LeaveBlock {
+export type LeaveUnit = 'semanas' | 'días naturales' | 'días laborables';
+export const LEAVE_UNITS: LeaveUnit[] = ['semanas', 'días naturales', 'días laborables'];
+
+/** Un permiso de una persona (cada empresa tiene los suyos): duración, código y reglas opcionales. */
+export interface LeaveType {
   person: string;
-  start: string; // ISO
-  weeks: number;
-  note: string;
+  name: string;
+  /** Código que se anota en el calendario */
+  code: string;
+  /** Código para media jornada ('' si este permiso no la admite) */
+  halfCode: string;
+  unit: LeaveUnit;
+  amount: number; // duración total, en la unidad
+  /** Reglas ligadas al nacimiento; 0 = no aplica */
+  mandatory: number; // unidades seguidas obligatorias desde el nacimiento
+  months: number; // meses desde el nacimiento para disfrutarlo…
+  extra: number; // …salvo estas unidades, que pueden ir más tarde
 }
 
-/** Reglas del permiso por nacimiento y cuidado del menor (editables en la app). */
-export interface BirthRules {
-  birth: string; // fecha de nacimiento (prevista), ISO o ''
-  total: number; // semanas por progenitor
-  mandatory: number; // semanas seguidas obligatorias desde el nacimiento
-  months: number; // meses en los que hay que disfrutar el resto…
-  extra: number; // …salvo estas semanas, que pueden ir más tarde
+/** Bloque planificado de un permiso. Una semana son 7 días seguidos desde el día de inicio. */
+export interface LeaveBlock {
+  person: string;
+  type: string; // nombre del permiso
+  start: string; // ISO
+  amount: number; // en la unidad del permiso
+  /** A media jornada: dura lo mismo en el calendario pero consume la mitad */
+  half: boolean;
+  note: string;
 }
 
 export interface Config {
@@ -60,8 +73,10 @@ export interface Config {
   codes: Code[];
   quotas: Quota[];
   days: SpecialDay[];
+  leaveTypes: LeaveType[];
   leaves: LeaveBlock[];
-  rules: BirthRules;
+  /** Fecha de nacimiento (prevista), ISO o '' */
+  birth: string;
 }
 
 /** persona -> fecha ISO -> código */
