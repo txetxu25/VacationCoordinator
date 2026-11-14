@@ -47,6 +47,23 @@ export function eachDay(from: string, to: string): string[] {
   return out;
 }
 
+export function addDays(date: string, n: number): string {
+  return new Date(new Date(date + 'T00:00:00Z').getTime() + n * 86400000).toISOString().slice(0, 10);
+}
+
+export function addMonths(date: string, n: number): string {
+  const { y, m, d } = parts(date);
+  const total = y * 12 + (m - 1) + n;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  return iso(ny, nm, Math.min(d, daysInMonth(ny, nm)));
+}
+
+export function formatLong(date: string): string {
+  const { y, m, d } = parts(date);
+  return `${d} ${MONTHS[m - 1].slice(0, 3).toLowerCase()} ${y}`;
+}
+
 export function formatShort(date: string): string {
   const { m, d } = parts(date);
   return `${WEEKDAYS[weekday(date) - 1]} ${d} ${MONTHS[m - 1].slice(0, 3).toLowerCase()}`;

@@ -1,17 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { consumeRedirect, getToken, login, logout } from '../backend/auth';
+import { canRenewSilently, consumeRedirect, getToken, login, logout, msUntilRenewal } from '../backend/auth';
 import { AuthError, GoogleBackend } from '../backend/google';
 import { MemoryBackend } from '../backend/memory';
 import { MONTHS, todayIso } from '../domain/dates';
 import { Store } from '../store';
 import { Balances } from './Balances';
 import { Calendar } from './Calendar';
+import { Leave } from './Leave';
 import { LegacyImport } from './LegacyImport';
 import { SettingsView } from './SettingsView';
 import { Setup } from './Setup';
+import { hasUnsavedChanges } from './dirty';
+import { YearView } from './YearView';
 import { type Settings, loadSettings, saveSettings } from './settings';
 
-type Tab = 'calendario' | 'saldos' | 'ajustes';
+type Tab = 'calendario' | 'año' | 'saldos' | 'permiso' | 'ajustes';
+const TABS: Tab[] = ['calendario', 'año', 'saldos', 'permiso', 'ajustes'];
+
+// Pestaña y mes en pantalla: se conservan si hay que pasar por Google para renovar la sesión.
+const VIEW_KEY = 'vc-view';
+function savedView(): { tab: Tab; year: number; month: number } | null {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? 'null');
+    return v && TABS.includes(v.tab) && v.year && v.month ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 // Se evalúa una sola vez al cargar: recoge el token si volvemos de Google.
 const redirectResult = consumeRedirect();
@@ -20,19 +35,39 @@ export function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [store, setStore] = useState<Store | null>(null);
   const [needLogin, setNeedLogin] = useState(false);
+  const [expired, setExpired] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [, setVersion] = useState(0);
-  const [tab, setTab] = useState<Tab>('calendario');
   const today = todayIso();
-  const [year, setYear] = useState(+today.slice(0, 4));
-  const [month, setMonth] = useState(+today.slice(5, 7));
-  const redirectError = useRef(redirectResult);
+  const [view] = useState(savedView);
+  const [tab, setTab] = useState<Tab>(view?.tab ?? 'calendario');
+  const [year, setYear] = useState(view?.year ?? +today.slice(0, 4));
+  const [month, setMonth] = useState(view?.month ?? +today.slice(5, 7));
+  const redirectError = useRef(redirectResult.error);
 
-  const fail = useCallback((e: unknown) => {
-    if (e instanceof AuthError) setNeedLogin(true);
-    else setError((e as Error).message || String(e));
-  }, []);
+  useEffect(() => {
+    sessionStorage.setItem(VIEW_KEY, JSON.stringify({ tab, year, month }));
+  }, [tab, year, month]);
+
+  /** Renueva la sesión sin preguntar si es posible; si no, enseña el botón de inicio de sesión. */
+  const renew = useCallback(() => {
+    if (settings.mode !== 'google') return;
+    if (canRenewSilently()) login(settings.clientId, true);
+    else setNeedLogin(true);
+  }, [settings]);
+
+  const fail = useCallback(
+    (e: unknown) => {
+      if (e instanceof AuthError) {
+        // Con cambios sin guardar no se recarga la página sin avisar
+        if (hasUnsavedChanges()) setExpired(true);
+        else renew();
+      }
+      else setError((e as Error).message || String(e));
+    },
+    [renew],
+  );
 
   /** Ejecuta una operación contra la hoja mostrando estado y errores. */
   const run = useCallback(
@@ -61,7 +96,8 @@ export function App() {
       redirectError.current = '';
     }
     if (settings.mode === 'google' && !getToken()) {
-      setNeedLogin(true);
+      if (!redirectResult.silentFailed && !redirectError.current && canRenewSilently()) login(settings.clientId, true);
+      else setNeedLogin(true);
       return;
     }
     const backend =
@@ -86,11 +122,28 @@ export function App() {
   useEffect(() => {
     if (!store) return;
     const onVisible = () => {
-      if (document.visibilityState === 'visible') run(() => store.refresh(year));
+      if (document.visibilityState !== 'visible') return;
+      if (settings.mode === 'google' && !getToken()) {
+        if (hasUnsavedChanges()) setExpired(true);
+        else renew();
+      } else if (!hasUnsavedChanges()) run(() => store.refresh(year));
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [store, year, run]);
+  }, [store, year, run, renew, settings]);
+
+  // Renovar la sesión poco antes de que caduque el token, sin esperar a que falle una operación
+  useEffect(() => {
+    if (!store || settings.mode !== 'google') return;
+    const ms = msUntilRenewal();
+    if (ms == null) return;
+    const timer = setTimeout(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (hasUnsavedChanges()) setExpired(true);
+      else renew();
+    }, Math.max(ms, 5_000));
+    return () => clearTimeout(timer);
+  }, [store, settings, renew]);
 
   const update = (s: Settings) => {
     saveSettings(s);
@@ -127,6 +180,13 @@ export function App() {
     );
 
   const hasYear = store.years.includes(year);
+  const monthly = tab === 'calendario';
+  const needsYear = tab === 'calendario' || tab === 'año' || tab === 'saldos';
+  const goTo = (date: string) => {
+    setYear(+date.slice(0, 4));
+    setMonth(+date.slice(5, 7));
+    setTab('calendario');
+  };
   const move = (delta: number) => {
     let m = month + delta;
     let y = year;
@@ -140,12 +200,12 @@ export function App() {
     <>
       <header>
         <div className="monthnav">
-          <button onClick={() => move(tab === 'calendario' ? -1 : -12)} aria-label="Anterior">‹</button>
+          <button onClick={() => move(monthly ? -1 : -12)} aria-label="Anterior">‹</button>
           <strong>
-            {tab === 'calendario' ? `${MONTHS[month - 1]} ` : ''}
+            {monthly ? `${MONTHS[month - 1]} ` : ''}
             {year}
           </strong>
-          <button onClick={() => move(tab === 'calendario' ? 1 : 12)} aria-label="Siguiente">›</button>
+          <button onClick={() => move(monthly ? 1 : 12)} aria-label="Siguiente">›</button>
         </div>
         <span className="status">
           {busy ? 'Guardando…' : settings.mode === 'demo' ? 'Modo demo' : ''}
@@ -157,6 +217,12 @@ export function App() {
           {error}
         </p>
       )}
+      {expired && (
+        <p className="warn">
+          La sesión de Google necesita renovarse y hay cambios sin guardar, que se perderán al hacerlo.{' '}
+          <button onClick={renew}>Renovar sesión</button>
+        </p>
+      )}
       {store.warning && (
         <p className="warn" onClick={() => { store.warning = ''; setVersion((v) => v + 1); }}>
           {store.warning}
@@ -164,7 +230,7 @@ export function App() {
       )}
 
       <main>
-        {!hasYear && tab !== 'ajustes' ? (
+        {!hasYear && needsYear ? (
           <div className="center">
             {store.legacy.includes(String(year)) ? (
               <LegacyImport store={store} title={String(year)} run={run} busy={busy} />
@@ -188,9 +254,13 @@ export function App() {
             year={year}
             month={month}
             today={today}
-            onGo={(date) => { setYear(+date.slice(0, 4)); setMonth(+date.slice(5, 7)); }}
+            onGo={goTo}
             run={run}
           />
+        ) : tab === 'año' ? (
+          <YearView store={store} year={year} today={today} onGo={goTo} />
+        ) : tab === 'permiso' ? (
+          <Leave store={store} run={run} busy={busy} />
         ) : tab === 'saldos' ? (
           <Balances store={store} year={year} today={today} run={run} />
         ) : (
@@ -206,7 +276,7 @@ export function App() {
       </main>
 
       <nav>
-        {(['calendario', 'saldos', 'ajustes'] as Tab[]).map((t) => (
+        {TABS.map((t) => (
           <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>
             {t[0].toUpperCase() + t.slice(1)}
           </button>

@@ -2,11 +2,12 @@ import type { Backend } from './backend/types';
 import { defaultConfig } from './domain/defaults';
 import { parts } from './domain/dates';
 import { type Legacy, parseLegacy } from './domain/legacy';
+import { leaveWrites } from './domain/leave';
 import { rangeWrites, specialDayWrites, teleworkWrites } from './domain/logic';
 import {
   SUMMARY_COL, type YearData, buildYear, isAppYearSheet, parseConfig, parseYear, serializeConfig,
 } from './domain/sheet';
-import type { CellWrite, Config, Grid, Person } from './domain/types';
+import type { BirthRules, CellWrite, Config, Grid, LeaveBlock, Person } from './domain/types';
 
 const CONFIG_SHEET = 'Config';
 const isYearTitle = (t: string) => /^\d{4}$/.test(t);
@@ -67,6 +68,10 @@ export class Store {
     await this.be.addSheet(title, 12 * this.config.people.length + 60, SUMMARY_COL + 6);
     const grid: Grid = {};
     for (const w of specialDayWrites(this.config, grid, year)) (grid[w.person] ??= {})[w.date] = w.code;
+    const adults = this.config.people.filter((p) => p.role === 'adulto').map((p) => p.name);
+    for (const w of leaveWrites(adults, [], this.config.leaves, () => grid)) {
+      if (w.date.startsWith(title)) (grid[w.person] ??= {})[w.date] = w.code;
+    }
     await this.writeYear(year, grid);
     this.years = [...this.years, year].sort();
   }
@@ -142,6 +147,14 @@ export class Store {
     return this.setCells(specialDayWrites(this.config, this.grid(year), year));
   }
 
+  /** Guarda el plan de permiso por nacimiento y lo refleja en las hojas de año (código PN). */
+  async saveLeaves(leaves: LeaveBlock[], rules: BirthRules) {
+    const adults = this.config.people.filter((p) => p.role === 'adulto').map((p) => p.name);
+    const writes = leaveWrites(adults, this.config.leaves, leaves, (y) => this.grid(y));
+    await this.saveConfigOnly({ ...this.config, leaves, rules });
+    await this.setCells(writes);
+  }
+
   /** Guarda solo cuotas / días: no cambia la estructura de las hojas de año. */
   async saveConfigOnly(config: Config) {
     this.config = config;
@@ -161,6 +174,7 @@ export class Store {
     config = {
       ...config,
       quotas: config.quotas.map((q) => ({ ...q, person: rn(q.person) })).filter((q) => names.has(q.person)),
+      leaves: config.leaves.map((l) => ({ ...l, person: rn(l.person) })).filter((l) => names.has(l.person)),
     };
     await this.saveConfigOnly(config);
     for (const year of this.years) {

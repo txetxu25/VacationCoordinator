@@ -3,6 +3,7 @@ import { MemoryBackend } from './backend/memory';
 import { defaultConfig } from './domain/defaults';
 import { parseDate, weekday } from './domain/dates';
 import { guessMapping, parseLegacy } from './domain/legacy';
+import { analyzeLeave, timeline } from './domain/leave';
 import { balances, coverage, specialDays, uncoveredDays } from './domain/logic';
 import { buildYear, colLetter, parseConfig, parseYear, serializeConfig, textToTelework } from './domain/sheet';
 import type { Config, Grid } from './domain/types';
@@ -11,10 +12,10 @@ import { Store } from './store';
 const cfg = (): Config => {
   const c = defaultConfig();
   c.people = [
-    { name: 'Ana', role: 'niño', telework: [] },
-    { name: 'Mamá', role: 'adulto', telework: [4] },
-    { name: 'Papá', role: 'adulto', telework: [2, 5] },
-    { name: 'Abuelos', role: 'abuelos', telework: [] },
+    { name: 'Ana', role: 'niño', telework: [], carryMonth: 0 },
+    { name: 'Mamá', role: 'adulto', telework: [4], carryMonth: 1 },
+    { name: 'Papá', role: 'adulto', telework: [2, 5], carryMonth: 3 },
+    { name: 'Abuelos', role: 'abuelos', telework: [], carryMonth: 0 },
   ];
   return c;
 };
@@ -70,6 +71,41 @@ describe('cobertura y saldos', () => {
     const grid: Grid = { Papá: { '2027-03-01': 'V', '2027-03-02': 'V', '2027-08-02': 'V', '2027-08-03': 'T' } };
     const v = balances(cq, grid, 2027, cq.people[2], '2027-06-01').find((b) => b.code.code === 'V')!;
     expect(v).toMatchObject({ available: 25, spent: 2, planned: 1, remaining: 22 });
+  });
+
+  it('vacaciones arrastradas: cálculo automático y caducidad', () => {
+    const cq = { ...c, quotas: [{ year: 2026, person: 'Papá', code: 'V', available: 25 }] };
+    const prev: Grid = { Papá: Object.fromEntries(['01', '02', '03', '04'].map((d) => [`2026-07-${d}`, 'V'])) };
+    const grid: Grid = { Papá: { '2027-02-01': 'VP', '2027-03-31': 'VP', '2027-04-01': 'VP' } };
+    const vp = balances(cq, grid, 2027, cq.people[2], '2027-01-10', prev).find((b) => b.code.code === 'VP')!;
+    expect(vp).toMatchObject({ available: 21, auto: true, planned: 3, remaining: 18, expiry: '2027-03-31', late: 1 });
+    // la otra persona caduca en enero; una cuota tecleada manda sobre el cálculo
+    const manual = { ...cq, quotas: [...cq.quotas, { year: 2027, person: 'Papá', code: 'VP', available: 5 }] };
+    expect(balances(manual, grid, 2027, cq.people[2], '2027-01-10', prev).find((b) => b.code.code === 'VP'))
+      .toMatchObject({ available: 5, auto: false });
+    expect(balances(cq, {}, 2027, cq.people[1], '2027-01-10', {}).find((b) => b.code.code === 'VP'))
+      .toMatchObject({ available: null, expiry: '2027-01-31' });
+  });
+
+  it('permiso por nacimiento en semanas naturales', () => {
+    const rules = { birth: '2027-02-10', total: 19, mandatory: 6, months: 12, extra: 2 }; // miércoles
+    const ok = [
+      { person: 'Papá', start: '2027-02-10', weeks: 6, note: '' },
+      { person: 'Papá', start: '2027-06-07', weeks: 11, note: '' },
+    ];
+    expect(analyzeLeave(rules, ok, 'Papá')).toEqual({ used: 17, remaining: 2, warnings: [] });
+    const bad = [
+      { person: 'Papá', start: '2027-02-10', weeks: 4, note: '' }, // faltan obligatorias
+      { person: 'Papá', start: '2027-03-01', weeks: 2, note: '' }, // se solapa con el anterior
+      { person: 'Papá', start: '2028-03-06', weeks: 14, note: '' }, // demasiadas después de 12 meses y del total
+    ];
+    const a = analyzeLeave(rules, bad, 'Papá');
+    expect(a.used).toBe(20);
+    expect(a.warnings).toHaveLength(4);
+    const t = timeline(rules, [...ok, { person: 'Mamá', start: '2027-02-10', weeks: 16, note: '' }], ['Mamá', 'Papá']);
+    expect(t[0]).toEqual({ start: '2027-02-10', on: [true, true] });
+    expect(t[6].on).toEqual([true, false]);
+    expect(t[16].on).toEqual([false, false]);
   });
 
   it('festivos de Madrid 2027', () => {
@@ -137,7 +173,7 @@ describe('store sobre una hoja simulada', () => {
       ...store.config, quotas: [{ year: 2027, person: 'Papá', code: 'P', available: 10 }],
     });
     const people = store.config.people.map((p) => (p.name === 'Papá' ? { ...p, name: 'Pau' } : p));
-    people.splice(1, 0, { name: 'Bebé', role: 'niño', telework: [] });
+    people.splice(1, 0, { name: 'Bebé', role: 'niño', telework: [], carryMonth: 0 });
     await store.saveConfig({ ...store.config, people }, new Map([['Papá', 'Pau']]));
     const fresh = new Store(be);
     await fresh.init();
@@ -172,9 +208,9 @@ describe('store sobre una hoja simulada', () => {
     const store = new Store(be);
     await store.init();
     const people = [
-      { name: 'Leonor', role: 'niño' as const, telework: [] },
-      { name: 'Pau', role: 'adulto' as const, telework: [] },
-      { name: 'Abuelos', role: 'abuelos' as const, telework: [] },
+      { name: 'Leonor', role: 'niño' as const, telework: [], carryMonth: 0 },
+      { name: 'Pau', role: 'adulto' as const, telework: [], carryMonth: 0 },
+      { name: 'Abuelos', role: 'abuelos' as const, telework: [], carryMonth: 0 },
     ];
     await store.saveConfig({ ...store.config, people });
     const mapping = guessMapping(['Leo', 'Pau', 'Abu', 'Otro'], people.map((p) => p.name));
@@ -193,6 +229,41 @@ describe('store sobre una hoja simulada', () => {
     const fresh = new Store(be);
     await fresh.init();
     expect(fresh.grid(2026)['Pau']['2026-11-16']).toBe('V');
+  });
+
+  it('el plan de permiso escribe PN en laborables y lo retira al cambiarlo', async () => {
+    const { be, store } = await setup();
+    const rules = { ...store.config.rules, birth: '2027-02-10' };
+    await store.saveLeaves([{ person: 'Papá', start: '2027-02-10', weeks: 6, note: '' }], rules);
+    const papa = () => store.grid(2027)['Papá'];
+    expect(papa()['2027-02-10']).toBe('PN');
+    expect(papa()['2027-02-13']).toBeUndefined(); // sábado
+    expect(papa()['2027-03-19']).toBe('PN'); // festivo dentro del permiso
+    expect(papa()['2027-03-23']).toBe('PN'); // último día (martes)
+    expect(papa()['2027-03-24']).toBeUndefined();
+    expect(Object.values(papa()).filter((c) => c === 'PN')).toHaveLength(30);
+    await store.saveLeaves([{ person: 'Papá', start: '2027-02-10', weeks: 2, note: '' }], rules);
+    expect(Object.values(papa()).filter((c) => c === 'PN')).toHaveLength(10);
+    const fresh = new Store(be);
+    await fresh.init();
+    expect(fresh.config.leaves).toEqual(store.config.leaves);
+    expect(fresh.config.rules.birth).toBe('2027-02-10');
+    expect(fresh.grid(2027)).toEqual(store.grid(2027));
+  });
+
+  it('lee una hoja Config creada por la versión anterior', async () => {
+    const be = new MemoryBackend();
+    await be.addSheet('Config');
+    await be.replace('Config', [
+      ['Persona', 'Rol', 'Teletrabajo', '', 'Código', 'Descripción', 'Rol', 'Cobertura', 'Color'],
+      ['Ana', 'niño', '', '', 'V', 'Vacaciones', 'adulto', '1', '#8fd19e'],
+      ['Papá', 'adulto', 'M,V', '', 'VE', 'Sin cole', 'niño', '1', '#fff3a0'],
+    ]);
+    const store = new Store(be);
+    await store.init();
+    expect(store.config.people[1]).toEqual({ name: 'Papá', role: 'adulto', telework: [2, 5], carryMonth: 0 });
+    expect(store.config.leaves).toEqual([]);
+    expect(store.config.rules.total).toBe(19);
   });
 
   it('no toca hojas de año con formato antiguo', async () => {
