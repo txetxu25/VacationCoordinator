@@ -5,6 +5,7 @@ import { type Code, type Person, ROLES, type Role, type SpecialDay } from '../do
 import type { Store } from '../store';
 import type { Run } from './App';
 import { LegacyImport } from './LegacyImport';
+import { THEMES, getTheme, setTheme } from './theme';
 import { useUnsaved } from './dirty';
 
 interface Props {
@@ -25,6 +26,7 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
   const [codes, setCodes] = useState<Code[]>(() => store.config.codes.map((c) => ({ ...c })));
   const [days, setDays] = useState<SpecialDay[]>(() => store.config.days.map((d) => ({ ...d })));
   const [dirty, setDirty] = useState(false);
+  const [theme, setThemeState] = useState(getTheme);
   useUnsaved(dirty);
 
   const edit = <T,>(list: T[], set: (l: T[]) => void, i: number, patch: Partial<T>) => {
@@ -71,6 +73,23 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
 
   return (
     <div className="cards">
+      <section className="card">
+        <h2>Apariencia</h2>
+        <div className="segmented" role="group" aria-label="Apariencia">
+          {THEMES.map((t) => (
+            <button
+              key={t}
+              className={t === theme ? 'active' : ''}
+              aria-pressed={t === theme}
+              onClick={() => { setTheme(t); setThemeState(t); }}
+            >
+              {t[0].toUpperCase() + t.slice(1)}
+            </button>
+          ))}
+        </div>
+        <p className="muted">«Sistema» sigue el modo claro u oscuro del dispositivo. Se guarda en este dispositivo.</p>
+      </section>
+
       <section className="card">
         <h2>Personas</h2>
         <p className="muted">Teletrabajo: días habituales con letras L, M, X, J, V separadas por comas. Las vacaciones que sobran de un año
