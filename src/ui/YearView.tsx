@@ -34,7 +34,7 @@ export function YearView({ store, year, today, onGo }: { store: Store; year: num
                 const bad = d <= max && coverage(config, grid, date).uncovered;
                 return (
                   <span key={d} className={`ynum${bad ? ' bad' : ''}${date === today ? ' now' : ''}`}>
-                    {d <= max && (d === 1 || d % 5 === 0 || bad) ? d : ''}
+                    {d <= max && (d === 1 || d % 5 === 0 || bad || date === today) ? d : ''}
                   </span>
                 );
               })}

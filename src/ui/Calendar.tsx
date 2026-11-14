@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { WEEKDAYS, daysInMonth, formatShort, isWeekend, iso, weekday } from '../domain/dates';
-import { codesFor, coverage, displayCode, specialDays, uncoveredDays } from '../domain/logic';
-import type { Person } from '../domain/types';
+import { codesFor, coverage, displayCode, rangeWrites, specialDays, uncoveredDays } from '../domain/logic';
+import type { CellWrite, Person } from '../domain/types';
 import type { Store } from '../store';
 import type { Run } from './App';
 
@@ -106,9 +106,9 @@ export function Calendar({ store, year, month, today, onGo, run }: Props) {
           current={grid[pick.person.name]?.[pick.date] ?? ''}
           note={special.get(pick.date)?.desc}
           onClose={() => setPick(null)}
-          onChoose={(code, until) => {
+          onApply={(writes) => {
             setPick(null);
-            run(() => store.setRange(pick.person, pick.date, until, code));
+            run(() => store.setCells(writes));
           }}
         />
       )}
@@ -116,6 +116,10 @@ export function Calendar({ store, year, month, today, onGo, run }: Props) {
   );
 }
 
+/**
+ * Elegir código y periodo. Primero se marca el código, se ajustan las fechas si es un periodo
+ * y se pulsa «Aplicar»; debajo se ve a cuántos días afecta y qué pasa con lo ya anotado.
+ */
 function Picker(props: {
   store: Store;
   person: Person;
@@ -123,11 +127,25 @@ function Picker(props: {
   current: string;
   note?: string;
   onClose: () => void;
-  onChoose: (code: string, until: string) => void;
+  onApply: (writes: CellWrite[]) => void;
 }) {
-  const { store, person, date, current, note, onClose, onChoose } = props;
-  const [until, setUntil] = useState(date);
-  const end = until && until >= date ? until : date;
+  const { store, person, date, current, note, onClose, onApply } = props;
+  const [code, setCode] = useState<string | null>(current || null); // '' = vaciar
+  const [from, setFrom] = useState(date);
+  const [to, setTo] = useState(date);
+  const [replace, setReplace] = useState(true);
+
+  const a = from || date;
+  const b = to && to >= a ? to : a;
+  const cell = (d: string) => store.grid(+d.slice(0, 4))[person.name]?.[d] ?? '';
+  const all = code == null ? [] : rangeWrites(store.config, person, a, b, code);
+  const outside = [...new Set(all.map((w) => w.date.slice(0, 4)).filter((y) => !store.years.includes(+y)))];
+  const inside = all.filter((w) => store.years.includes(+w.date.slice(0, 4)));
+  const occupied = inside.filter((w) => cell(w.date) && cell(w.date) !== w.code);
+  const keep = code !== '' && !replace;
+  const writes = inside.filter((w) => cell(w.date) !== w.code && !(keep && cell(w.date)));
+  const period = a !== b;
+
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet" role="dialog" aria-label="Elegir código" onClick={(e) => e.stopPropagation()}>
@@ -135,26 +153,59 @@ function Picker(props: {
           {person.name} · {formatShort(date)}
         </h2>
         {note && <p className="muted">{note}</p>}
-        <label className="until">
-          Aplicar hasta (salta fines de semana y festivos)
-          <input type="date" value={until} min={date} max={`${date.slice(0, 4)}-12-31`} onChange={(e) => setUntil(e.target.value)} />
-        </label>
         <div className="codes">
           {codesFor(store.config, person).map((c) => (
             <button
               key={c.code}
-              className={c.code === current ? 'selected' : ''}
+              className={c.code === code ? 'selected' : ''}
+              aria-pressed={c.code === code}
               style={{ background: c.color }}
-              onClick={() => onChoose(c.code, end)}
+              onClick={() => setCode(c.code)}
             >
               <b>{c.code}</b>
               <small>{c.desc}</small>
             </button>
           ))}
+          <button className={code === '' ? 'selected' : ''} aria-pressed={code === ''} onClick={() => setCode('')}>
+            <b>Vaciar</b>
+            <small>Quitar lo anotado</small>
+          </button>
         </div>
+        <div className="period">
+          <label>
+            Desde
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </label>
+          <label>
+            Hasta
+            <input type="date" value={to} min={a} onChange={(e) => setTo(e.target.value)} />
+          </label>
+        </div>
+        {period && code !== '' && (
+          <label className="check">
+            <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
+            Sustituir lo que ya esté anotado en esos días
+          </label>
+        )}
+        <p className="muted summary">
+          {code == null
+            ? 'Elige un código.'
+            : `${period ? 'Laborables del periodo (sin fines de semana ni festivos)' : 'Día'}: ${inside.length}. ` +
+              (occupied.length
+                ? `${occupied.length} ya ${occupied.length === 1 ? 'tiene' : 'tienen'} otro código y se ${keep ? 'respetará' : 'sustituirá'}${occupied.length === 1 ? '' : 'n'}. `
+                : '') +
+              `Se ${code === '' ? 'vaciarán' : 'anotarán'} ${writes.length}.`}
+        </p>
+        {outside.length > 0 && (
+          <p className="warn inline">
+            Parte del periodo cae en {outside.join(' y ')}, que todavía no tiene hoja en la app: esos días no se anotarán.
+          </p>
+        )}
         <div className="row">
-          <button onClick={() => onChoose('', end)}>Vaciar</button>
           <button onClick={onClose}>Cancelar</button>
+          <button className="primary" disabled={code == null || writes.length === 0} onClick={() => onApply(writes)}>
+            Aplicar{writes.length > 1 ? ` a ${writes.length} días` : ''}
+          </button>
         </div>
       </div>
     </div>
