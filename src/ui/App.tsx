@@ -45,6 +45,8 @@ export function App() {
   const [year, setYear] = useState(view?.year ?? +today.slice(0, 4));
   const [month, setMonth] = useState(view?.month ?? +today.slice(5, 7));
   const redirectError = useRef(redirectResult.error);
+  const latest = useRef({ store, year });
+  latest.current = { store, year };
 
   useEffect(() => {
     sessionStorage.setItem(VIEW_KEY, JSON.stringify({ tab, year, month }));
@@ -75,9 +77,15 @@ export function App() {
       setBusy(true);
       setError('');
       try {
-        await fn();
+        const pending = fn();
+        // El cambio ya está en memoria: se pinta al momento en todas las vistas, sin esperar a Google
+        setVersion((v) => v + 1);
+        await pending;
       } catch (e) {
         fail(e);
+        // Si no se pudo guardar, se vuelve a leer la hoja para no mostrar algo que no está guardado
+        const { store: s, year: y } = latest.current;
+        if (s && !(e instanceof AuthError)) await s.refresh(y).catch(() => {});
       } finally {
         setBusy(false);
         setVersion((v) => v + 1);
