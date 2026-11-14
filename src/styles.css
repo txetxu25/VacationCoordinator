@@ -137,3 +137,5 @@ p.neg { color: var(--danger); }
 .ltype .edit input[type='date'] { width: 8.6em; padding: 6px 4px; font-size: 0.85rem; }
 .ltype .edit td.end { font-size: 0.72rem; white-space: normal; padding: 0 2px; line-height: 1.1; }
 .ltype .edit input.short { width: 3em; }
+.month { cursor: pointer; }
+.month:active { background: #eef3ef; }
