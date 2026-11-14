@@ -55,6 +55,14 @@ export class GoogleBackend implements Backend {
     await this.listSheets();
   }
 
+  async renameSheet(from: string, to: string) {
+    if (!this.ids.has(from)) await this.listSheets();
+    const sheetId = this.ids.get(from);
+    if (sheetId == null) throw new Error(`No existe la hoja "${from}"`);
+    await this.batch([{ updateSheetProperties: { properties: { sheetId, title: to }, fields: 'title' } }]);
+    await this.listSheets();
+  }
+
   async read(sheet: string) {
     const res = await this.call<{ values?: unknown[][] }>(`/values/${encodeURIComponent(a1(sheet))}`);
     return (res.values ?? []).map((r) => r.map((v) => String(v ?? '')));

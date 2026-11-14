@@ -1,6 +1,7 @@
 import type { Backend } from './backend/types';
 import { defaultConfig } from './domain/defaults';
 import { parts } from './domain/dates';
+import { type Legacy, parseLegacy } from './domain/legacy';
 import { rangeWrites, specialDayWrites, teleworkWrites } from './domain/logic';
 import {
   SUMMARY_COL, type YearData, buildYear, isAppYearSheet, parseConfig, parseYear, serializeConfig,
@@ -67,6 +68,31 @@ export class Store {
     const grid: Grid = {};
     for (const w of specialDayWrites(this.config, grid, year)) (grid[w.person] ??= {})[w.date] = w.code;
     await this.writeYear(year, grid);
+    this.years = [...this.years, year].sort();
+  }
+
+  /** Lee una hoja con formato antiguo, sin modificarla. */
+  async readLegacy(title: string): Promise<Legacy> {
+    return parseLegacy(await this.be.read(title), +title);
+  }
+
+  /**
+   * Pasa un año con formato antiguo al formato de la app. La hoja original no se pierde:
+   * se renombra a "<año> original" y se crea una nueva con los mismos datos.
+   * `mapping`: nombre antiguo -> persona de la app ('' = no importar).
+   */
+  async importLegacy(title: string, mapping: Record<string, string>) {
+    const year = +title;
+    const legacy = await this.readLegacy(title);
+    const grid: Grid = {};
+    for (const [old, cells] of Object.entries(legacy.grid)) {
+      const target = mapping[old];
+      if (target && this.config.people.some((p) => p.name === target)) grid[target] = { ...grid[target], ...cells };
+    }
+    await this.be.renameSheet(title, `${title} original`);
+    await this.be.addSheet(title, 12 * this.config.people.length + 60, SUMMARY_COL + 6);
+    await this.writeYear(year, grid);
+    this.legacy = this.legacy.filter((t) => t !== title);
     this.years = [...this.years, year].sort();
   }
 

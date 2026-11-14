@@ -5,6 +5,10 @@ import type { CellWrite, Code, Config, DayType, Grid, Person } from './types';
 export const findCode = (config: Config, person: Person, code: string): Code | undefined =>
   config.codes.find((c) => c.role === person.role && c.code === code);
 
+/** Para pintar una celda: si el código no es del rol de la persona, usa el de otro rol (p. ej. F en abuelos). */
+export const displayCode = (config: Config, person: Person, code: string): Code | undefined =>
+  findCode(config, person, code) ?? config.codes.find((c) => c.code === code);
+
 export const codesFor = (config: Config, person: Person) => config.codes.filter((c) => c.role === person.role);
 
 /** fecha -> festivo / no lectivo de ese año (el festivo gana si coinciden) */
@@ -108,8 +112,9 @@ export function specialDayWrites(config: Config, grid: Grid, year: number): Cell
     if (isWeekend(date)) continue;
     for (const p of config.people) {
       if (grid[p.name]?.[date]) continue;
-      const code = sd.type === 'festivo' ? CODE_HOLIDAY : p.role === 'niño' ? CODE_NO_SCHOOL : '';
-      if (code && findCode(config, p, code)) out.push({ person: p.name, date, code });
+      // Festivo: para todas las personas. No lectivo: solo para los niños.
+      if (sd.type === 'festivo') out.push({ person: p.name, date, code: CODE_HOLIDAY });
+      else if (p.role === 'niño' && findCode(config, p, CODE_NO_SCHOOL)) out.push({ person: p.name, date, code: CODE_NO_SCHOOL });
     }
   }
   return out;

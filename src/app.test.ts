@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MemoryBackend } from './backend/memory';
 import { defaultConfig } from './domain/defaults';
 import { parseDate, weekday } from './domain/dates';
+import { guessMapping, parseLegacy } from './domain/legacy';
 import { balances, coverage, specialDays, uncoveredDays } from './domain/logic';
 import { buildYear, colLetter, parseConfig, parseYear, serializeConfig, textToTelework } from './domain/sheet';
 import type { Config, Grid } from './domain/types';
@@ -97,7 +98,8 @@ describe('store sobre una hoja simulada', () => {
     expect(g['Ana']['2027-01-06']).toBe('F');
     expect(g['Ana']['2027-02-12']).toBe('VE');
     expect(g['Ana']['2027-02-13']).toBeUndefined(); // sábado
-    expect(g['Abuelos']).toBeUndefined();
+    expect(g['Abuelos']['2027-01-06']).toBe('F'); // festivos para todos
+    expect(g['Abuelos']['2027-02-12']).toBeUndefined();
     expect(uncoveredDays(store.config, g, 2027)).toContain('2027-02-12');
   });
 
@@ -134,26 +136,74 @@ describe('store sobre una hoja simulada', () => {
     await store.saveConfigOnly({
       ...store.config, quotas: [{ year: 2027, person: 'Papá', code: 'P', available: 10 }],
     });
-    const people = store.config.people.map((p) => (p.name === 'Papá' ? { ...p, name: 'Txe' } : p));
+    const people = store.config.people.map((p) => (p.name === 'Papá' ? { ...p, name: 'Pau' } : p));
     people.splice(1, 0, { name: 'Bebé', role: 'niño', telework: [] });
-    await store.saveConfig({ ...store.config, people }, new Map([['Papá', 'Txe']]));
+    await store.saveConfig({ ...store.config, people }, new Map([['Papá', 'Pau']]));
     const fresh = new Store(be);
     await fresh.init();
-    expect(fresh.grid(2027)['Txe']['2027-05-04']).toBe('P');
+    expect(fresh.grid(2027)['Pau']['2027-05-04']).toBe('P');
     expect(fresh.grid(2027)['Papá']).toBeUndefined();
-    expect(fresh.config.quotas[0].person).toBe('Txe');
+    expect(fresh.config.quotas[0].person).toBe('Pau');
     expect((await be.read('2027')).length).toBe(1 + 12 * 5);
+  });
+
+  it('importa un año con formato antiguo conservando el original', async () => {
+    const be = new MemoryBackend();
+    await be.addSheet('2026');
+    const days = Array.from({ length: 31 }, (_, i) => String(i + 1));
+    const row = (p: string, m: string, name: string, cells: Record<number, string>) => [
+      '', p, m, name, ...days.map((d) => cells[+d] ?? ''), '', 'Fam', 'Vacaciones', 'V', '13',
+    ];
+    const original = [
+      ['2026'],
+      ['', '', '', '', ...days, '', 'Fam', 'Descripción', 'Código', 'Recuento'],
+      row('Mar', '1', 'Enero', { 1: 'VE', 2: 'VE' }),
+      row('Pau', '1', '', { 1: 'F', 2: 'VP' }),
+      row('Abu', '1', '', {}),
+      row('Pau', '11', 'Noviembre', { 3: 'T', 30: 'V' }),
+      row('Otro', '12', 'Diciembre', { 8: 'F' }),
+    ];
+    await be.replace('2026', original);
+    expect(parseLegacy(original, 2026).people).toEqual(['Mar', 'Pau', 'Abu', 'Otro']);
+    // formato 2025: mes abreviado en cada fila y sin columna de número
+    const old = parseLegacy([['', '', '', ...days], ['', 'Mar', 'Feb', 'FD', '', 'VE']], 2025);
+    expect(old.grid).toEqual({ Mar: { '2025-02-01': 'FD', '2025-02-03': 'VE' } });
+
+    const store = new Store(be);
+    await store.init();
+    const people = [
+      { name: 'Martina', role: 'niño' as const, telework: [] },
+      { name: 'Pau', role: 'adulto' as const, telework: [] },
+      { name: 'Abuelos', role: 'abuelos' as const, telework: [] },
+    ];
+    await store.saveConfig({ ...store.config, people });
+    const mapping = guessMapping(['Mar', 'Pau', 'Abu', 'Otro'], people.map((p) => p.name));
+    expect(mapping).toEqual({ Mar: 'Martina', Pau: 'Pau', Abu: 'Abuelos', Otro: '' });
+    await store.importLegacy('2026', mapping);
+
+    expect(await be.listSheets()).toEqual(['2026 original', 'Config', '2026']);
+    expect(await be.read('2026 original')).toEqual(original);
+    expect(store.years).toEqual([2026]);
+    expect(store.legacy).toEqual([]);
+    expect(store.grid(2026)).toEqual({
+      Martina: { '2026-01-01': 'VE', '2026-01-02': 'VE' },
+      Pau: { '2026-01-01': 'F', '2026-01-02': 'VP', '2026-11-03': 'T', '2026-11-30': 'V' },
+    });
+    await store.setRange(people[1], '2026-11-16', '2026-11-16', 'V');
+    const fresh = new Store(be);
+    await fresh.init();
+    expect(fresh.grid(2026)['Pau']['2026-11-16']).toBe('V');
   });
 
   it('no toca hojas de año con formato antiguo', async () => {
     const be = new MemoryBackend();
     await be.addSheet('2026');
-    await be.replace('2026', [['2026'], ['', 'Gon', '1', 'Enero', 'VE']]);
+    await be.replace('2026', [['2026'], ['', 'Mar', '1', 'Enero', 'VE']]);
     const store = new Store(be);
     await store.init();
     expect(store.legacy).toEqual(['2026']);
     expect(store.years).toEqual([]);
     await expect(store.createYear(2026)).rejects.toThrow();
-    expect((await be.read('2026'))[1][1]).toBe('Gon');
+    expect((await be.read('2026'))[1][1]).toBe('Mar');
   });
 });

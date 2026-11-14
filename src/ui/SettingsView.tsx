@@ -173,7 +173,7 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
       <section className="card">
         <h2>Conexión</h2>
         {store.legacy.length > 0 && (
-          <p className="muted">Hojas con formato antiguo (histórico, no se modifican): {store.legacy.join(', ')}.</p>
+          <p className="muted">Hojas con formato antiguo: {store.legacy.join(', ')}. Para editarlas desde la app, ve a ese año en Calendario e impórtalo.</p>
         )}
         <button onClick={onDisconnect}>Desconectar / cambiar de hoja</button>
       </section>

@@ -6,6 +6,7 @@ import { MONTHS, todayIso } from '../domain/dates';
 import { Store } from '../store';
 import { Balances } from './Balances';
 import { Calendar } from './Calendar';
+import { LegacyImport } from './LegacyImport';
 import { SettingsView } from './SettingsView';
 import { Setup } from './Setup';
 import { type Settings, loadSettings, saveSettings } from './settings';
@@ -70,7 +71,7 @@ export function App() {
       await s.init();
       if (!s.years.includes(year)) {
         // Sin hoja para el año en curso: ir al siguiente año gestionado (o al que toca crear).
-        const y = s.years.find((y) => y > year) ?? s.years[s.years.length - 1] ?? year + (s.legacy.includes(String(year)) ? 1 : 0);
+        const y = s.years.find((y) => y > year) ?? s.years[s.years.length - 1] ?? year;
         if (y !== year) {
           setYear(y);
           setMonth(y > year ? 1 : 12);
@@ -165,15 +166,15 @@ export function App() {
       <main>
         {!hasYear && tab !== 'ajustes' ? (
           <div className="center">
-            <p>
-              {store.legacy.includes(String(year))
-                ? `La hoja ${year} tiene el formato antiguo y se conserva como histórico; la app no la modifica.`
-                : `Todavía no existe la hoja ${year}.`}
-            </p>
-            {!store.legacy.includes(String(year)) && (
-              <button className="primary" disabled={busy} onClick={() => run(() => store.createYear(year))}>
-                Crear hoja {year}
-              </button>
+            {store.legacy.includes(String(year)) ? (
+              <LegacyImport store={store} title={String(year)} run={run} busy={busy} />
+            ) : (
+              <>
+                <p>Todavía no existe la hoja {year}.</p>
+                <button className="primary" disabled={busy} onClick={() => run(() => store.createYear(year))}>
+                  Crear hoja {year}
+                </button>
+              </>
             )}
             {store.years.length > 0 && (
               <button className="link" onClick={() => { setYear(store.years[0]); setMonth(1); }}>

@@ -26,6 +26,13 @@ export class MemoryBackend implements Backend {
     this.save();
   }
 
+  async renameSheet(from: string, to: string) {
+    if (this.sheets.has(to)) throw new Error(`Ya existe la hoja "${to}"`);
+    // Conserva el orden de las hojas
+    this.sheets = new Map([...this.sheets].map(([k, v]) => [k === from ? to : k, v]));
+    this.save();
+  }
+
   async read(sheet: string) {
     return (this.sheets.get(sheet) ?? []).map((r) => [...r]);
   }

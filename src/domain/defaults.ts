@@ -23,6 +23,7 @@ export const DEFAULT_CODES: Code[] = [
   { code: 'A1', desc: 'Abuelo/a 1', role: 'abuelos', weight: 1, color: '#d9c8bf' },
   { code: 'A2', desc: 'Abuelo/a 2', role: 'abuelos', weight: 1, color: '#c9b6e0' },
   { code: 'A3', desc: 'Abuelo/a 3', role: 'abuelos', weight: 1, color: '#c5d8a4' },
+  { code: 'F', desc: 'Festivo', role: 'abuelos', weight: 0, color: '#dcdcdc' },
 ];
 
 const f = (date: string, desc: string): SpecialDay => ({ from: date, to: date, type: 'festivo', desc });
