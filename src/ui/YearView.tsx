@@ -23,8 +23,8 @@ export function YearView({ store, year, today, onGo }: { store: Store; year: num
         const m = i + 1;
         const max = daysInMonth(year, m);
         return (
-          <section key={m} className="card month">
-            <button className="monthtitle" onClick={() => onGo(iso(year, m, 1))}>
+          <section key={m} className="card month" onClick={() => onGo(iso(year, m, 1))}>
+            <button className="monthtitle" aria-label={`Abrir ${name} en el calendario`}>
               {name} <span aria-hidden>›</span>
             </button>
             <div className="ygrid" role="img" aria-label={`Resumen de ${name}`}>
