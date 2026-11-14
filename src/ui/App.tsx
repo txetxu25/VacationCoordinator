@@ -233,7 +233,7 @@ export function App() {
         {!hasYear && needsYear ? (
           <div className="center">
             {store.legacy.includes(String(year)) ? (
-              <LegacyImport store={store} title={String(year)} run={run} busy={busy} />
+              <LegacyImport store={store} source={String(year)} run={run} busy={busy} />
             ) : (
               <>
                 <p>Todavía no existe la hoja {year}.</p>

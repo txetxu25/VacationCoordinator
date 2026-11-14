@@ -6,13 +6,13 @@
  *   después: un bloque por mes con una fila por persona; cada celda, un código.
  *   A partir de la columna AI hay un resumen con fórmulas (solo lectura para la app).
  *
- * Hoja "Config": seis tablas, una al lado de otra, con cabecera en la fila 1.
- *   A-D personas · E-I códigos · K-N cuotas · P-S días especiales · U-X permiso por nacimiento · Y-Z ajustes
+ * Hoja "Config": cinco tablas, una al lado de otra, con cabecera en la fila 1.
+ *   A-D personas · E-I códigos · K-N cuotas · P-S días especiales · U-V ajustes
  */
 import { MONTHS, WEEKDAYS, daysInMonth, iso, parseDate } from './dates';
-import { DEFAULT_RULES } from './defaults';
-import type {
-  BirthRules, Code, Config, DayType, Grid, LeaveBlock, Person, Quota, Role, SpecialDay,
+import {
+  type Code, type Config, type DayType, type Grid, LEAVE_UNITS, type LeaveBlock, type LeaveType, type Person,
+  type Quota, type Role, type SpecialDay,
 } from './types';
 
 export const YEAR_HEADER = ['Mes', 'Persona'];
@@ -110,18 +110,19 @@ export const textToTelework = (s: string) =>
     .sort();
 
 /** Columna inicial de cada tabla de la hoja Config (todas caben en A..Z). */
-const COL = { people: 0, codes: 4, quotas: 10, days: 15, leaves: 20, rules: 24 };
+const COL = { people: 0, codes: 4, quotas: 10, days: 15, settings: 20 };
+const BIRTH_KEY = 'Nacimiento';
 
-const RULE_KEYS: [keyof BirthRules, string][] = [
-  ['birth', 'Nacimiento'],
-  ['total', 'PN semanas'],
-  ['mandatory', 'PN obligatorias'],
-  ['months', 'PN meses'],
-  ['extra', 'PN semanas posteriores'],
-];
+function layout(blocks: [number, string[][]][]): string[][] {
+  const height = Math.max(...blocks.map(([, b]) => b.length));
+  const width = Math.max(...blocks.map(([col, b]) => col + b[0].length));
+  const out: string[][] = Array.from({ length: height }, () => Array(width).fill(''));
+  for (const [col, block] of blocks) block.forEach((row, r) => row.forEach((v, i) => (out[r][col + i] = v)));
+  return out;
+}
 
 export function serializeConfig(c: Config): string[][] {
-  const blocks: [number, string[][]][] = [
+  return layout([
     [
       COL.people,
       [
@@ -144,19 +145,60 @@ export function serializeConfig(c: Config): string[][] {
       ],
     ],
     [COL.days, [['Desde', 'Hasta', 'Tipo', 'Descripción'], ...c.days.map((d) => [d.from, d.to, d.type, d.desc])]],
+    [COL.settings, [['Ajuste', 'Valor'], [BIRTH_KEY, c.birth]]],
+  ]);
+}
+
+/**
+ * Hoja "Permisos": tipos de permiso por persona (A-I) y bloques planificados (K-P).
+ */
+const LCOL = { types: 0, blocks: 10 };
+
+export function serializeLeaves(c: Config): string[][] {
+  return layout([
     [
-      COL.leaves,
+      LCOL.types,
       [
-        ['PN persona', 'PN inicio', 'PN semanas', 'PN nota'],
-        ...c.leaves.map((l) => [l.person, l.start, String(l.weeks), l.note]),
+        ['Persona', 'Permiso', 'Código', 'Código media jornada', 'Unidad', 'Duración', 'Obligatorias', 'Meses', 'Posteriores'],
+        ...c.leaveTypes.map((t) => [
+          t.person, t.name, t.code, t.halfCode, t.unit, String(t.amount), String(t.mandatory), String(t.months), String(t.extra),
+        ]),
       ],
     ],
-    [COL.rules, [['Ajuste', 'Valor'], ...RULE_KEYS.map(([k, label]) => [label, String(c.rules[k])])]],
-  ];
-  const height = Math.max(...blocks.map(([, b]) => b.length));
-  const out: string[][] = Array.from({ length: height }, () => Array(COL.rules + 2).fill(''));
-  for (const [col, block] of blocks) block.forEach((row, r) => row.forEach((v, i) => (out[r][col + i] = v)));
-  return out;
+    [
+      LCOL.blocks,
+      [
+        ['Persona', 'Permiso', 'Inicio', 'Cantidad', 'Jornada', 'Nota'],
+        ...c.leaves.map((l) => [l.person, l.type, l.start, String(l.amount), l.half ? 'media' : 'completa', l.note]),
+      ],
+    ],
+  ]);
+}
+
+export function parseLeaves(values: string[][]): Pick<Config, 'leaveTypes' | 'leaves'> {
+  const leaveTypes: LeaveType[] = [];
+  const leaves: LeaveBlock[] = [];
+  const num = (s: string) => {
+    const n = parseNum(s);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+  for (const raw of values.slice(1)) {
+    const v = (i: number) => (raw[i] ?? '').trim();
+    if (v(0) && v(1)) {
+      const unit = LEAVE_UNITS.find((u) => norm(u) === norm(v(4))) ?? 'semanas';
+      leaveTypes.push({
+        person: v(0), name: v(1), code: v(2), halfCode: v(3), unit,
+        amount: num(v(5)), mandatory: num(v(6)), months: num(v(7)), extra: num(v(8)),
+      });
+    }
+    const start = parseDate(v(12));
+    if (v(10) && v(11) && start && num(v(13)) > 0) {
+      leaves.push({
+        person: v(10), type: v(11), start, amount: num(v(13)), half: norm(v(14)).startsWith('media'), note: v(15),
+      });
+    }
+  }
+  return { leaveTypes, leaves };
 }
 
 export function parseConfig(values: string[][]): Config {
@@ -164,8 +206,7 @@ export function parseConfig(values: string[][]): Config {
   const codes: Code[] = [];
   const quotas: Quota[] = [];
   const days: SpecialDay[] = [];
-  const leaves: LeaveBlock[] = [];
-  const rules: BirthRules = { ...DEFAULT_RULES };
+  let birth = '';
   for (const raw of values.slice(1)) {
     const v = (i: number) => (raw[i] ?? '').trim();
     if (v(0)) {
@@ -193,14 +234,8 @@ export function parseConfig(values: string[][]): Config {
       const type: DayType = norm(v(17)).startsWith('no') ? 'no lectivo' : 'festivo';
       days.push({ from, to: parseDate(v(16)) ?? from, type, desc: v(18) });
     }
-    const start = parseDate(v(21));
-    const weeks = parseNum(v(22));
-    if (v(20) && start && weeks > 0) leaves.push({ person: v(20), start, weeks: Math.round(weeks), note: v(23) });
-    const rule = RULE_KEYS.find(([, label]) => norm(label) === norm(v(24)));
-    if (rule) {
-      if (rule[0] === 'birth') rules.birth = parseDate(v(25)) ?? '';
-      else if (v(25) !== '' && Number.isFinite(parseNum(v(25)))) rules[rule[0]] = parseNum(v(25));
-    }
+    // la fecha de nacimiento está en U-V (en la versión anterior, en Y-Z)
+    for (const col of [COL.settings, 24]) if (norm(v(col)) === norm(BIRTH_KEY)) birth = parseDate(v(col + 1)) ?? birth;
   }
-  return { people, codes, quotas, days, leaves, rules };
+  return { people, codes, quotas, days, leaveTypes: [], leaves: [], birth };
 }

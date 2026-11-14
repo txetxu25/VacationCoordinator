@@ -1,15 +1,13 @@
-import { CODE_BIRTH_LEAVE } from '../domain/defaults';
 import { formatLong } from '../domain/dates';
-import { analyzeLeave } from '../domain/leave';
-import { balances } from '../domain/logic';
+import { analyzeLeave, fmt } from '../domain/leave';
+import { balances, holidayChecker } from '../domain/logic';
 import type { Store } from '../store';
 import type { Run } from './App';
-
-const adult0 = (role: string) => role === 'adulto';
 
 export function Balances({ store, year, today, run }: { store: Store; year: number; today: string; run: Run }) {
   const { config } = store;
   const grid = store.grid(year);
+  const isHoliday = holidayChecker(config);
   const prevGrid = store.years.includes(year - 1) ? store.grid(year - 1) : undefined;
 
   const setQuota = (person: string, code: string, text: string) => {
@@ -24,7 +22,7 @@ export function Balances({ store, year, today, run }: { store: Store; year: numb
       {config.people.map((p) => {
         const rows = balances(config, grid, year, p, today, prevGrid);
         const carry = rows.find((b) => b.expiry);
-        const leave = adult0(p.role) && config.rules.birth ? analyzeLeave(config.rules, config.leaves, p.name) : null;
+        const leaves = config.leaveTypes.filter((t) => t.person === p.name);
         const adult = p.role === 'adulto';
         return (
           <section key={p.name} className="card">
@@ -82,12 +80,14 @@ export function Balances({ store, year, today, run }: { store: Store; year: numb
                 {(carry.late ?? 0) > 0 && ` Hay ${carry.late} anotadas después de esa fecha.`}
               </p>
             )}
-            {leave && (
-              <p className="note">
-                Permiso por nacimiento ({CODE_BIRTH_LEAVE}): {leave.used} de {config.rules.total} semanas planificadas,
-                quedan {leave.remaining}.
-              </p>
-            )}
+            {leaves.map((t) => {
+              const a = analyzeLeave(config.birth, t, config.leaves, isHoliday);
+              return (
+                <p key={t.name} className="note">
+                  {t.name}: planificado {fmt(a.used)} de {fmt(t.amount)} {t.unit}; sin planificar, {fmt(a.remaining)}.
+                </p>
+              );
+            })}
             {!adult && rows.every((b) => b.spent + b.planned === 0) && <p className="muted">Sin días anotados en {year}.</p>}
           </section>
         );

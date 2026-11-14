@@ -1,4 +1,4 @@
-import type { BirthRules, Code, Config, SpecialDay } from './types';
+import type { Code, Config, SpecialDay } from './types';
 
 /** Códigos con significado fijo para la app (el resto son libres y se editan en Ajustes). */
 export const CODE_TELEWORK = 'T';
@@ -8,8 +8,11 @@ export const CODE_VACATION = 'V';
 export const CODE_CARRY = 'VP';
 export const CODE_BIRTH_LEAVE = 'PN';
 
-/** Art. 48.4 ET tras el RDL 9/2025: 19 semanas (6 obligatorias + 11 en 12 meses + 2 hasta los 8 años). */
-export const DEFAULT_RULES: BirthRules = { birth: '', total: 19, mandatory: 6, months: 12, extra: 2 };
+/**
+ * Permiso por nacimiento del régimen general (art. 48.4 ET tras el RDL 9/2025): 19 semanas,
+ * 6 obligatorias desde el nacimiento, el resto en 12 meses salvo 2 que pueden ir hasta los 8 años.
+ */
+export const STANDARD_BIRTH_LEAVE = { unit: 'semanas' as const, amount: 19, mandatory: 6, months: 12, extra: 2 };
 
 export const DEFAULT_CODES: Code[] = [
   { code: 'V', desc: 'Vacaciones', role: 'adulto', weight: 1, color: '#8fd19e' },
@@ -36,27 +39,46 @@ const f = (date: string, desc: string): SpecialDay => ({ from: date, to: date, t
 const nl = (from: string, to: string, desc: string): SpecialDay => ({ from, to, type: 'no lectivo', desc });
 
 /**
- * Madrid capital, 2027.
- * Festivos: Decreto de fiestas laborales 2027 de la Comunidad de Madrid (12 comunes).
- * Los dos locales y los no lectivos están tomados de prensa: revisar contra BOCM / el centro.
+ * Madrid capital. Festivos: decretos de fiestas laborales de la Comunidad de Madrid.
+ * Los locales de 2027 y los no lectivos están tomados de prensa: revisar contra BOCM / el centro.
  */
-export const MADRID_DAYS: SpecialDay[] = [
-  f('2027-01-01', 'Año Nuevo'),
-  f('2027-01-06', 'Epifanía'),
-  f('2027-03-19', 'San José'),
-  f('2027-03-25', 'Jueves Santo'),
-  f('2027-03-26', 'Viernes Santo'),
-  f('2027-08-16', 'Asunción (trasladado)'),
-  f('2027-10-12', 'Fiesta Nacional'),
-  f('2027-11-01', 'Todos los Santos'),
-  f('2027-11-09', 'La Almudena (local, sin confirmar)'),
-  f('2027-12-06', 'Constitución'),
-  f('2027-12-08', 'Inmaculada'),
-  nl('2027-01-04', '2027-01-08', 'Navidad (sin confirmar)'),
-  nl('2027-02-12', '2027-02-15', 'No lectivos febrero (sin confirmar)'),
-  nl('2027-03-22', '2027-03-29', 'Semana Santa (sin confirmar)'),
-  nl('2027-06-21', '2027-08-31', 'Verano (inicio curso 27-28 pendiente)'),
-];
+const MADRID: Record<number, SpecialDay[]> = {
+  2026: [
+    f('2026-01-01', 'Año Nuevo'),
+    f('2026-01-06', 'Epifanía'),
+    f('2026-04-02', 'Jueves Santo'),
+    f('2026-04-03', 'Viernes Santo'),
+    f('2026-05-01', 'Fiesta del Trabajo'),
+    f('2026-05-15', 'San Isidro (local)'),
+    f('2026-10-12', 'Fiesta Nacional'),
+    f('2026-11-02', 'Todos los Santos (trasladado)'),
+    f('2026-11-09', 'La Almudena (local)'),
+    f('2026-12-07', 'Constitución (trasladado)'),
+    f('2026-12-08', 'Inmaculada'),
+    f('2026-12-25', 'Navidad'),
+  ],
+  2027: [
+    f('2027-01-01', 'Año Nuevo'),
+    f('2027-01-06', 'Epifanía'),
+    f('2027-03-19', 'San José'),
+    f('2027-03-25', 'Jueves Santo'),
+    f('2027-03-26', 'Viernes Santo'),
+    f('2027-08-16', 'Asunción (trasladado)'),
+    f('2027-10-12', 'Fiesta Nacional'),
+    f('2027-11-01', 'Todos los Santos'),
+    f('2027-11-09', 'La Almudena (local, sin confirmar)'),
+    f('2027-12-06', 'Constitución'),
+    f('2027-12-08', 'Inmaculada'),
+    nl('2027-01-04', '2027-01-08', 'Navidad (sin confirmar)'),
+    nl('2027-02-12', '2027-02-15', 'No lectivos febrero (sin confirmar)'),
+    nl('2027-03-22', '2027-03-29', 'Semana Santa (sin confirmar)'),
+    nl('2027-06-21', '2027-08-31', 'Verano (inicio curso 27-28 pendiente)'),
+  ],
+};
+
+/** Festivos y no lectivos precargados de un año ([] si no los hay). */
+export const madridDays = (year: number): SpecialDay[] => (MADRID[year] ?? []).map((d) => ({ ...d }));
+export const MADRID_DAYS: SpecialDay[] = [...madridDays(2026), ...madridDays(2027)];
 
 export function defaultConfig(): Config {
   return {
@@ -70,7 +92,8 @@ export function defaultConfig(): Config {
     codes: DEFAULT_CODES.map((c) => ({ ...c })),
     quotas: [],
     days: MADRID_DAYS.map((d) => ({ ...d })),
+    leaveTypes: [],
     leaves: [],
-    rules: { ...DEFAULT_RULES },
+    birth: '',
   };
 }

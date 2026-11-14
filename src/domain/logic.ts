@@ -11,6 +11,16 @@ export const displayCode = (config: Config, person: Person, code: string): Code 
 
 export const codesFor = (config: Config, person: Person) => config.codes.filter((c) => c.role === person.role);
 
+/** Función "¿es festivo?" para cualquier fecha, según la tabla de días especiales. */
+export function holidayChecker(config: Config): (date: string) => boolean {
+  const cache = new Map<number, Map<string, { type: DayType }>>();
+  return (date) => {
+    const y = +date.slice(0, 4);
+    if (!cache.has(y)) cache.set(y, specialDays(config, y));
+    return cache.get(y)!.get(date)?.type === 'festivo';
+  };
+}
+
 /** fecha -> festivo / no lectivo de ese año (el festivo gana si coinciden) */
 export function specialDays(config: Config, year: number): Map<string, { type: DayType; desc: string }> {
   const map = new Map<string, { type: DayType; desc: string }>();
@@ -137,10 +147,10 @@ export function teleworkWrites(config: Config, grid: Grid, year: number, month =
 }
 
 /** Festivos (F para todos) y no lectivos (VE para los niños), solo en laborables vacíos. */
-export function specialDayWrites(config: Config, grid: Grid, year: number): CellWrite[] {
+export function specialDayWrites(config: Config, grid: Grid, year: number, only?: DayType): CellWrite[] {
   const out: CellWrite[] = [];
   for (const [date, sd] of specialDays(config, year)) {
-    if (isWeekend(date)) continue;
+    if (isWeekend(date) || (only && sd.type !== only)) continue;
     for (const p of config.people) {
       if (grid[p.name]?.[date]) continue;
       // Festivo: para todas las personas. No lectivo: solo para los niños.

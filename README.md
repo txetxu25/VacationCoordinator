@@ -15,22 +15,27 @@ Toda la información se guarda en una hoja de cálculo de Google (la app no tien
 - **Año**: el año entero en una pantalla, con los días sin cubrir marcados en rojo.
 - **Saldos**: por persona y tipo, disponibles (editable), gastados, planificados y restantes. Las vacaciones
   (`V`) que sobran de un año pasan solas al siguiente como `VP`, con el mes límite de cada persona.
-- **Permiso**: planificador del permiso por nacimiento en bloques de semanas naturales completas, con avisos
-  si el plan no encaja en las reglas (editables) y una línea de tiempo para ver solapes y huecos. Al guardar,
-  las semanas se anotan como `PN` en el calendario.
+- **Permiso**: planificador de permisos. Cada persona define los suyos (nombre, duración, unidad —semanas,
+  días naturales o días laborables—, código de calendario, código de media jornada y reglas opcionales ligadas
+  al nacimiento) y los reparte en bloques. Avisa si el plan no encaja y muestra una línea de tiempo con solapes
+  y huecos. Al guardar, cada bloque se anota con su código en el calendario.
 - **Ajustes**: personas, patrón semanal de teletrabajo, códigos, festivos y no lectivos.
 
 ## Formato de la hoja de cálculo
 
 La app crea y gestiona estas hojas; las hojas de años anteriores con otro formato no se tocan.
 
-- `Config`: seis tablas en paralelo: personas (A-D), códigos (E-I), cuotas (K-N), festivos / no lectivos (P-S),
-  bloques de permiso por nacimiento (U-X) y ajustes del permiso (Y-Z).
+- `Config`: tablas en paralelo: personas (A-D), códigos (E-I), cuotas (K-N), festivos / no lectivos (P-S) y
+  ajustes (U-V).
+- `Permisos`: tipos de permiso por persona (A-I) y bloques planificados (K-P).
 - Una hoja por año (`2027`…): `Mes | Persona | 1 … 31`, con un bloque por mes y una fila por persona.
   Cada celda contiene un código. A la derecha (columna AI) hay un resumen con fórmulas.
 
 Una hoja de año rellenada a mano con otro formato se puede importar desde la app; la original se conserva
-como `<año> original`.
+como `<año> original` y desde Ajustes se puede volver a importar de ella lo que faltase.
+
+Los festivos de la tabla se anotan como `F` para todas las personas en los días que tengan vacíos: al crear o
+importar un año, al guardar los ajustes y al abrir la app.
 
 Se puede editar la hoja a mano respetando ese formato. Si se cambian personas o códigos desde la app,
 las hojas de año se regeneran.
