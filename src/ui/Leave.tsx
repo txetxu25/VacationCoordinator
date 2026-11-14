@@ -150,8 +150,9 @@ export function Leave({ store, run, busy }: { store: Store; run: Run; busy: bool
       )}
 
       <p className="muted">
-        Al guardar, cada semana se anota como PN de lunes a viernes en el calendario (fines de semana y festivos
-        también cuentan como permiso, aunque no se pinten).
+        Un bloque puede empezar cualquier día de la semana: cada semana son 7 días seguidos desde la fecha de inicio
+        (por ejemplo, de jueves a miércoles). Al guardar se anota PN en los días laborables de esos periodos; los
+        fines de semana también cuentan como permiso, aunque no se pinten.
       </p>
       <button
         className="primary"

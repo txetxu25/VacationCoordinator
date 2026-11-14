@@ -3,7 +3,7 @@ import { MemoryBackend } from './backend/memory';
 import { defaultConfig } from './domain/defaults';
 import { parseDate, weekday } from './domain/dates';
 import { guessMapping, parseLegacy } from './domain/legacy';
-import { analyzeLeave, timeline } from './domain/leave';
+import { analyzeLeave, blockEnd, timeline } from './domain/leave';
 import { balances, coverage, specialDays, uncoveredDays } from './domain/logic';
 import { buildYear, colLetter, parseConfig, parseYear, serializeConfig, textToTelework } from './domain/sheet';
 import type { Config, Grid } from './domain/types';
@@ -94,6 +94,8 @@ describe('cobertura y saldos', () => {
       { person: 'Papá', start: '2027-06-07', weeks: 11, note: '' },
     ];
     expect(analyzeLeave(rules, ok, 'Papá')).toEqual({ used: 17, remaining: 2, warnings: [] });
+    // un bloque que empieza en jueves termina el miércoles siguiente
+    expect(blockEnd({ person: 'Papá', start: '2027-06-10', weeks: 1, note: '' })).toBe('2027-06-16');
     const bad = [
       { person: 'Papá', start: '2027-02-10', weeks: 4, note: '' }, // faltan obligatorias
       { person: 'Papá', start: '2027-03-01', weeks: 2, note: '' }, // se solapa con el anterior
