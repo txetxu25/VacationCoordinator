@@ -13,6 +13,7 @@ import { Setup } from './Setup';
 import { confirmLeave, hasUnsavedChanges } from './dirty';
 import { useSwipe } from './swipe';
 import { YearView } from './YearView';
+import { Icon } from './look';
 import { type Settings, loadSettings, saveSettings } from './settings';
 
 type Tab = 'calendario' | 'año' | 'saldos' | 'ajustes';
@@ -235,17 +236,25 @@ export function App() {
   return (
     <>
       <header>
+        <div className="htitle">
+          <strong>{tab === 'ajustes' ? 'Ajustes' : monthly ? MONTHS[month - 1] : year}</strong>
+          {monthly && <span>{year}</span>}
+          {(busy || settings.mode === 'demo') && (
+            <span className={`status${busy ? ' busy' : ''}`}>{busy ? 'Guardando…' : 'Demo'}</span>
+          )}
+        </div>
         <div className="monthnav">
+          {(monthly ? `${year}-${String(month).padStart(2, '0')}` : String(year)) !== (monthly ? today.slice(0, 7) : today.slice(0, 4)) && (
+            <button
+              className="today"
+              onClick={() => { setYear(+today.slice(0, 4)); setMonth(+today.slice(5, 7)); }}
+            >
+              Hoy
+            </button>
+          )}
           <button onClick={() => move(monthly ? -1 : -12)} aria-label="Anterior">‹</button>
-          <strong>
-            {monthly ? `${MONTHS[month - 1]} ` : ''}
-            {year}
-          </strong>
           <button onClick={() => move(monthly ? 1 : 12)} aria-label="Siguiente">›</button>
         </div>
-        <span className="status">
-          {busy ? 'Guardando…' : settings.mode === 'demo' ? 'Modo demo' : ''}
-        </span>
       </header>
 
       {error && (
@@ -331,6 +340,7 @@ export function App() {
       <nav>
         {TABS.map((t) => (
           <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>
+            <span className="ico"><Icon name={t} /></span>
             {t[0].toUpperCase() + t.slice(1)}
           </button>
         ))}

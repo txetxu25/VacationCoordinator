@@ -3,6 +3,7 @@ import { analyzeLeave, fmt } from '../domain/leave';
 import { balances, holidayChecker } from '../domain/logic';
 import type { Store } from '../store';
 import type { Run } from './App';
+import { Avatar } from './look';
 
 export function Balances({ store, year, today, run }: { store: Store; year: number; today: string; run: Run }) {
   const { config } = store;
@@ -26,49 +27,74 @@ export function Balances({ store, year, today, run }: { store: Store; year: numb
         const adult = p.role === 'adulto';
         return (
           <section key={p.name} className="card">
-            <h2>{p.name}</h2>
-            <table className="bal">
-              <thead>
-                <tr>
-                  <th>Tipo</th>
-                  {adult && <th>Disponibles</th>}
-                  <th>Gastados</th>
-                  <th>Planificados</th>
-                  {adult && <th>Quedan</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {rows
-                  .filter((b) => adult || b.spent + b.planned > 0)
-                  .map((b) => (
-                    <tr key={b.code.code}>
-                      <td>
-                        <i style={{ background: b.code.color }}>{b.code.code}</i> {b.code.desc}
-                      </td>
-                      {adult && (
-                        <td>
-                          <input
-                            key={`${year}-${b.available}-${b.auto}`}
-                            inputMode="decimal"
-                            aria-label={`Disponibles ${b.code.desc} ${p.name}`}
-                            defaultValue={b.auto ? '' : b.available ?? ''}
-                            placeholder={b.auto ? String(b.available) : '–'}
-                            title={b.auto ? 'Calculado: lo que quedó sin gastar el año anterior' : undefined}
-                            onBlur={(e) => {
-                              if (e.target.value !== String(b.auto ? '' : b.available ?? '')) setQuota(p.name, b.code.code, e.target.value);
-                            }}
-                          />
-                        </td>
-                      )}
-                      <td>{b.spent}</td>
-                      <td>{b.planned}</td>
-                      {adult && (
-                        <td className={b.remaining != null && b.remaining < 0 ? 'neg' : ''}>{b.remaining ?? '–'}</td>
-                      )}
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+            <h2 className="who">
+              <Avatar people={config.people} name={p.name} size={34} />
+              {p.name}
+            </h2>
+            {(() => {
+              const quota = (b: (typeof rows)[number]) => (
+                <input
+                  key={`${year}-${b.available}-${b.auto}`}
+                  className="quota"
+                  inputMode="decimal"
+                  aria-label={`Disponibles ${b.code.desc} ${p.name}`}
+                  defaultValue={b.auto ? '' : b.available ?? ''}
+                  placeholder={b.auto ? String(b.available) : '–'}
+                  title={b.auto ? 'Calculado: lo que quedó sin gastar el año anterior' : undefined}
+                  onBlur={(e) => {
+                    if (e.target.value !== String(b.auto ? '' : b.available ?? '')) setQuota(p.name, b.code.code, e.target.value);
+                  }}
+                />
+              );
+              const shown = rows.filter((b) => b.available != null || b.spent + b.planned > 0);
+              const others = adult ? rows.filter((b) => !shown.includes(b)) : [];
+              return (
+                <>
+                  {shown.map((b) => {
+                    const total = Math.max(b.available ?? 0, b.spent + b.planned, 1);
+                    const pct = (n: number) => `${Math.min(100, (n / total) * 100)}%`;
+                    return (
+                      <div key={b.code.code} className="meter">
+                        <div className="mtop">
+                          <span className="mname">
+                            <i style={{ background: b.code.color }}>{b.code.code}</i> {b.code.desc}
+                          </span>
+                          {b.remaining != null ? (
+                            <span className={`mleft${b.remaining < 0 ? ' neg' : ''}`}>
+                              <b>{b.remaining}</b> {Math.abs(b.remaining) === 1 ? 'queda' : 'quedan'}
+                            </span>
+                          ) : (
+                            <span className="mleft"><b>{b.spent + b.planned}</b> {b.spent + b.planned === 1 ? 'día' : 'días'}</span>
+                          )}
+                        </div>
+                        {b.available != null && (
+                          <div className="bar" role="img" aria-label={`${b.spent} gastados y ${b.planned} planificados de ${b.available}`}>
+                            <span className="spent" style={{ width: pct(b.spent), background: b.code.color }} />
+                            <span className="planned" style={{ width: pct(b.planned), background: b.code.color }} />
+                          </div>
+                        )}
+                        <div className="msub">
+                          {b.spent} {b.spent === 1 ? 'gastado' : 'gastados'} · {b.planned} {b.planned === 1 ? 'planificado' : 'planificados'}
+                          {adult && <> · de {quota(b)}</>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {!shown.length && <p className="muted">Sin días anotados en {year}.</p>}
+                  {others.length > 0 && (
+                    <details className="others">
+                      <summary>Fijar cupo de otros tipos</summary>
+                      {others.map((b) => (
+                        <div key={b.code.code} className="orow">
+                          <span><i style={{ background: b.code.color }}>{b.code.code}</i> {b.code.desc}</span>
+                          {quota(b)}
+                        </div>
+                      ))}
+                    </details>
+                  )}
+                </>
+              );
+            })()}
             {carry && carry.available != null && (
               <p className={`note${(carry.late ?? 0) > 0 || (carry.remaining ?? 0) > 0 ? ' warn inline' : ''}`}>
                 Vacaciones del año anterior{carry.auto ? ` (${carry.available}, calculadas)` : ''}: se pueden gastar hasta
@@ -88,7 +114,6 @@ export function Balances({ store, year, today, run }: { store: Store; year: numb
                 </p>
               );
             })}
-            {!adult && rows.every((b) => b.spent + b.planned === 0) && <p className="muted">Sin días anotados en {year}.</p>}
           </section>
         );
       })}

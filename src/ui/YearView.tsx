@@ -1,6 +1,7 @@
 import { MONTHS, daysInMonth, isWeekend, iso } from '../domain/dates';
 import { coverage, displayCode, uncoveredDays } from '../domain/logic';
 import type { Store } from '../store';
+import { personColor } from './look';
 
 /** El año entero en una pantalla: un bloque por mes, una fila por persona, un cuadro por día. */
 export function YearView({ store, year, today, onGo }: { store: Store; year: number; today: string; onGo: (date: string) => void }) {
@@ -39,7 +40,7 @@ export function YearView({ store, year, today, onGo }: { store: Store; year: num
                 );
               })}
               {config.people.map((p) => (
-                <YearRow key={p.name} label={p.name}>
+                <YearRow key={p.name} label={p.name} color={personColor(config.people, p.name)}>
                   {dayNumbers.map((d) => {
                     if (d > max) return <span key={d} />;
                     const date = iso(year, m, d);
@@ -64,10 +65,10 @@ export function YearView({ store, year, today, onGo }: { store: Store; year: num
   );
 }
 
-function YearRow({ label, children }: { label: string; children: React.ReactNode }) {
+function YearRow({ label, color, children }: { label: string; color: string; children: React.ReactNode }) {
   return (
     <>
-      <span className="ylabel">{label}</span>
+      <span className="ylabel"><span className="dot" style={{ background: color }} />{label}</span>
       {children}
     </>
   );
