@@ -10,18 +10,21 @@ import { Leave } from './Leave';
 import { LegacyImport } from './LegacyImport';
 import { SettingsView } from './SettingsView';
 import { Setup } from './Setup';
-import { hasUnsavedChanges } from './dirty';
+import { confirmLeave, hasUnsavedChanges } from './dirty';
+import { useSwipe } from './swipe';
 import { YearView } from './YearView';
 import { type Settings, loadSettings, saveSettings } from './settings';
 
-type Tab = 'calendario' | 'año' | 'saldos' | 'permiso' | 'ajustes';
-const TABS: Tab[] = ['calendario', 'año', 'saldos', 'permiso', 'ajustes'];
+type Tab = 'calendario' | 'año' | 'saldos' | 'ajustes';
+const TABS: Tab[] = ['calendario', 'año', 'saldos', 'ajustes'];
+type SettingsPage = 'general' | 'permisos';
 
 // Pestaña y mes en pantalla: se conservan si hay que pasar por Google para renovar la sesión.
 const VIEW_KEY = 'vc-view';
 function savedView(): { tab: Tab; year: number; month: number } | null {
   try {
     const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? 'null');
+    if (v?.tab === 'permiso') v.tab = 'ajustes'; // la pestaña Permiso pasó a Ajustes
     return v && TABS.includes(v.tab) && v.year && v.month ? v : null;
   } catch {
     return null;
@@ -41,7 +44,32 @@ export function App() {
   const [, setVersion] = useState(0);
   const today = todayIso();
   const [view] = useState(savedView);
-  const [tab, setTab] = useState<Tab>(view?.tab ?? 'calendario');
+  const [tab, setTabState] = useState<Tab>(view?.tab ?? 'calendario');
+  const [page, setPage] = useState<SettingsPage>('general');
+  const [slide, setSlide] = useState<'' | 'from-right' | 'from-left'>('');
+  // El elemento cambia al cambiar de pestaña (se vuelve a montar para animar): se sigue con estado, no con ref
+  const [mainEl, setMainEl] = useState<HTMLElement | null>(null);
+
+  /** Cambiar de pestaña, con animación en el sentido del movimiento y sin perder cambios por sorpresa. */
+  const setTab = useCallback(
+    (next: Tab) => {
+      if (next === tabRef.current || !confirmLeave()) return;
+      setSlide(TABS.indexOf(next) > TABS.indexOf(tabRef.current) ? 'from-right' : 'from-left');
+      setTabState(next);
+      window.scrollTo(0, 0);
+    },
+    [],
+  );
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const onSwipe = useCallback(
+    (dir: 1 | -1) => {
+      const next = TABS[TABS.indexOf(tabRef.current) + dir];
+      if (next) setTab(next);
+    },
+    [setTab],
+  );
+  useSwipe(mainEl, onSwipe);
   const [year, setYear] = useState(view?.year ?? +today.slice(0, 4));
   const [month, setMonth] = useState(view?.month ?? +today.slice(5, 7));
   const redirectError = useRef(redirectResult.error);
@@ -237,7 +265,7 @@ export function App() {
         </p>
       )}
 
-      <main>
+      <main ref={setMainEl} key={tab} className={slide}>
         {!hasYear && needsYear ? (
           <div className="center">
             {store.legacy.includes(String(year)) ? (
@@ -267,19 +295,36 @@ export function App() {
           />
         ) : tab === 'año' ? (
           <YearView store={store} year={year} today={today} onGo={goTo} />
-        ) : tab === 'permiso' ? (
-          <Leave store={store} run={run} busy={busy} />
         ) : tab === 'saldos' ? (
           <Balances store={store} year={year} today={today} run={run} />
         ) : (
-          <SettingsView
-            store={store}
-            year={year}
-            hasYear={hasYear}
-            run={run}
-            busy={busy}
-            onDisconnect={() => { logout(); update({ ...settings, mode: '' }); }}
-          />
+          <>
+            <div className="segmented subnav" role="tablist" aria-label="Secciones de ajustes">
+              {(['general', 'permisos'] as SettingsPage[]).map((p) => (
+                <button
+                  key={p}
+                  role="tab"
+                  aria-selected={p === page}
+                  className={p === page ? 'active' : ''}
+                  onClick={() => p !== page && confirmLeave() && setPage(p)}
+                >
+                  {p === 'general' ? 'General' : 'Permisos'}
+                </button>
+              ))}
+            </div>
+            {page === 'permisos' ? (
+              <Leave store={store} run={run} busy={busy} />
+            ) : (
+              <SettingsView
+                store={store}
+                year={year}
+                hasYear={hasYear}
+                run={run}
+                busy={busy}
+                onDisconnect={() => { logout(); update({ ...settings, mode: '' }); }}
+              />
+            )}
+          </>
         )}
       </main>
 

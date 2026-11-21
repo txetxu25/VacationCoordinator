@@ -15,3 +15,7 @@ export function useUnsaved(dirty: boolean) {
     };
   }, [dirty]);
 }
+
+/** Antes de salir de una pantalla: si hay cambios sin guardar, pide confirmación. */
+export const confirmLeave = () =>
+  !hasUnsavedChanges() || confirm('Hay cambios sin guardar en esta pantalla. ¿Salir y descartarlos?');

@@ -4,6 +4,7 @@ import { codesFor, coverage, displayCode, rangeWrites, specialDays, uncoveredDay
 import type { CellWrite, Person } from '../domain/types';
 import type { Store } from '../store';
 import type { Run } from './App';
+import { Sheet } from './Sheet';
 
 interface Props {
   store: Store;
@@ -147,11 +148,7 @@ function Picker(props: {
   const period = a !== b;
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-label="Elegir código" onClick={(e) => e.stopPropagation()}>
-        <h2>
-          {person.name} · {formatShort(date)}
-        </h2>
+    <Sheet label="Elegir código" title={`${person.name} · ${formatShort(date)}`} onClose={onClose}>
         {note && <p className="muted">{note}</p>}
         <div className="codes">
           {codesFor(store.config, person).map((c) => (
@@ -207,7 +204,6 @@ function Picker(props: {
             Aplicar{writes.length > 1 ? ` a ${writes.length} días` : ''}
           </button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

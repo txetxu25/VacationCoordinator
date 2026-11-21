@@ -195,3 +195,34 @@ body { background: var(--bg); color: var(--text); }
 .segmented button + button { border-left: 1px solid var(--line); }
 .segmented button.active { background: var(--brand); color: #fff; font-weight: 600; }
 .codes button:not([style]) { border-color: var(--line); }
+
+/* Hoja inferior con barrita para arrastrar */
+.overlay { animation: fade-in 0.2s ease; }
+.overlay.closing { animation: fade-out 0.2s ease forwards; }
+.sheet { animation: sheet-up 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); padding-top: 0; }
+.sheet.closing { animation: sheet-down 0.2s ease forwards; }
+.sheet.dragging { transition: none; }
+.sheet:not(.dragging):not(.closing) { transition: transform 0.2s ease; }
+.grab {
+  position: sticky; top: 0; z-index: 1; background: var(--surface); touch-action: none; cursor: grab;
+  padding: 8px 0 6px; margin-bottom: 6px;
+}
+.grab .handle { display: block; width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 10px; }
+.grab h2 { margin: 0; }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+@keyframes sheet-down { to { transform: translateY(100%); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes fade-out { to { opacity: 0; } }
+
+/* Transición al cambiar de pestaña */
+main.from-right { animation: from-right 0.22s ease; }
+main.from-left { animation: from-left 0.22s ease; }
+@keyframes from-right { from { transform: translateX(40px); opacity: 0; } }
+@keyframes from-left { from { transform: translateX(-40px); opacity: 0; } }
+html, body { overflow-x: hidden; }
+
+/* Subsecciones de Ajustes */
+.subnav { margin: 0 0 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .overlay, .sheet, main.from-right, main.from-left { animation: none !important; }
+}
