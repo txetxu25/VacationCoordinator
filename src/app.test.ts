@@ -5,6 +5,8 @@ import { parseDate, weekday } from './domain/dates';
 import { guessMapping, parseLegacy } from './domain/legacy';
 import { analyzeLeave, blockEnd, hasOverlap, timeline } from './domain/leave';
 import type { LeaveType } from './domain/types';
+import { codeCounts, coverers } from './domain/stats';
+import { computedMadridHolidays, easter } from './domain/holidays';
 import { balances, coverage, specialDays, uncoveredDays } from './domain/logic';
 import { buildYear, colLetter, parseConfig, parseYear, serializeConfig, textToTelework } from './domain/sheet';
 import type { Config, Grid } from './domain/types';
@@ -134,6 +136,31 @@ describe('cobertura y saldos', () => {
     const b = { person: 'Papá', type: 'Operación', start: '2027-03-18', amount: 5, half: false, note: '' };
     expect(blockEnd(b, op, isHoliday)).toBe('2027-03-25'); // salta el festivo del 19 y el fin de semana
     expect(analyzeLeave('2027-02-10', op, [b], isHoliday)).toEqual({ used: 5, remaining: 0, warnings: [] });
+  });
+
+  it('estadísticas: reparto por tipo y quién cubre', () => {
+    const grid: Grid = {
+      Ana: { '2027-02-12': 'VE', '2027-02-15': 'E', '2027-02-16': 'E', '2027-01-06': 'F', '2027-12-20': 'VE' },
+      Papá: { '2027-02-12': 'V', '2027-02-15': 'MB', '2027-02-16': 'T', '2027-01-06': 'F', '2027-12-20': 'CM' },
+      Mamá: { '2027-02-15': 'MB', '2027-02-11': 'V' },
+      Abuelos: { '2027-02-16': 'A1' },
+    };
+    const counts = codeCounts(c, grid, 2027, c.people[2], '2027-06-01');
+    expect(counts.map((x) => [x.code.code, x.spent, x.planned])).toEqual([['V', 1, 0], ['MB', 1, 0], ['T', 1, 0], ['CM', 0, 1]]);
+    const r = coverers(c, grid, 2027, '2027-06-01');
+    expect(r.needed).toBe(4); // el festivo no cuenta
+    expect(r.uncovered).toBe(0);
+    expect(r.list.map((x) => [x.label, x.spent, x.planned])).toEqual([
+      ['Papá', 1.5, 1], ['Mamá', 0.5, 0], ['Abuelo/a 1', 1, 0],
+    ].sort((a, b) => (b[1] as number) + (b[2] as number) - ((a[1] as number) + (a[2] as number))));
+  });
+
+  it('festivos calculados para años sin lista', () => {
+    expect([2026, 2027, 2028].map(easter)).toEqual(['2026-04-05', '2027-03-28', '2028-04-16']);
+    const d = computedMadridHolidays(2028);
+    expect(d.find((x) => x.desc.startsWith('Viernes Santo'))?.from).toBe('2028-04-14');
+    expect(d.find((x) => x.from === '2028-01-06')?.desc).toBe('Epifanía (calculado)');
+    expect(computedMadridHolidays(2027).find((x) => x.from === '2027-05-02')?.desc).toContain('domingo');
   });
 
   it('festivos de Madrid 2027', () => {

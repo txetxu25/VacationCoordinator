@@ -296,7 +296,7 @@ export function App() {
         ) : tab === 'año' ? (
           <YearView store={store} year={year} today={today} onGo={goTo} />
         ) : tab === 'saldos' ? (
-          <Balances store={store} year={year} today={today} run={run} />
+          <Balances store={store} year={year} today={today} />
         ) : (
           <>
             <div className="segmented subnav" role="tablist" aria-label="Secciones de ajustes">

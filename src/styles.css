@@ -226,3 +226,41 @@ html, body { overflow-x: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .overlay, .sheet, main.from-right, main.from-left { animation: none !important; }
 }
+
+/* Saldos: vista de solo lectura */
+.stats h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 14px 0 6px; }
+.who { display: flex; align-items: center; gap: 10px; }
+.who small { display: block; font-size: 0.78rem; font-weight: 500; color: var(--muted); }
+.avatar { display: inline-grid; place-items: center; border-radius: 50%; color: #fff; font-weight: 800; flex: none; }
+.htrack { display: flex; height: 12px; border-radius: 99px; background: var(--cell-empty); overflow: hidden; flex: 1; }
+.htrack.tall { height: 14px; margin: 6px 0 2px; }
+.htrack > span { height: 100%; }
+.htrack .planned, .key .planned {
+  opacity: 0.5;
+  background-image: repeating-linear-gradient(135deg, transparent 0 4px, rgba(255, 255, 255, 0.55) 4px 7px) !important;
+}
+.htrack.stack > span + span { box-shadow: inset 2px 0 0 var(--surface); }
+.hbar { display: grid; grid-template-columns: 8.5em 1fr 2.6em; align-items: center; gap: 8px; padding: 6px 0; }
+.hlabel { display: flex; align-items: center; gap: 6px; font-size: 0.88rem; font-weight: 600; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hnum { text-align: right; }
+.sw { width: 22px; height: 22px; border-radius: 50%; flex: none; }
+.meter { padding: 6px 0; }
+.mtop { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.mname { font-size: 0.9rem; font-weight: 600; }
+.mleft { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
+.mleft b { font-size: 1.2rem; color: var(--text); }
+.mleft.neg b { color: var(--danger); }
+.dist { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; }
+.dist li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 0.88rem; }
+.dname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dnum small { color: var(--muted); font-size: 0.75rem; }
+.pill { display: inline-block; padding: 4px 10px; border-radius: 99px; font-size: 0.85rem; margin: 2px 0 6px; }
+.pill.sick { background: var(--err-bg); color: var(--err-fg); }
+.key { font-size: 0.75rem; color: var(--muted); display: flex; align-items: center; gap: 6px; margin: 8px 0 0; }
+.key .k { display: inline-block; width: 18px; height: 8px; border-radius: 4px; background: var(--muted); }
+.center-text { text-align: center; }
+.quotas td:first-child { font-size: 0.85rem; }
+.quotas td input.short { width: 4em; text-align: center; }
+.edit select { min-width: 6.2em; }
+.edit input[type='date'] { min-width: 8.6em; }
+.edit td:first-child input:not(.short) { min-width: 6.5em; }

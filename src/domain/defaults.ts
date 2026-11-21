@@ -1,3 +1,4 @@
+import { computedMadridHolidays } from './holidays';
 import type { Code, Config, SpecialDay } from './types';
 
 /** Códigos con significado fijo para la app (el resto son libres y se editan en Ajustes). */
@@ -77,8 +78,11 @@ const MADRID: Record<number, SpecialDay[]> = {
 };
 
 /** Festivos y no lectivos precargados de un año ([] si no los hay). */
-export const madridDays = (year: number): SpecialDay[] => (MADRID[year] ?? []).map((d) => ({ ...d }));
-export const MADRID_DAYS: SpecialDay[] = [...madridDays(2026), ...madridDays(2027)];
+export const madridDays = (year: number): SpecialDay[] =>
+  MADRID[year] ? MADRID[year].map((d) => ({ ...d })) : computedMadridHolidays(year);
+/** ¿Hay lista revisada para ese año, o solo calculada? */
+export const hasOfficialDays = (year: number) => !!MADRID[year];
+export const MADRID_DAYS: SpecialDay[] = [...MADRID[2026], ...MADRID[2027]].map((d) => ({ ...d }));
 
 export function defaultConfig(): Config {
   return {
