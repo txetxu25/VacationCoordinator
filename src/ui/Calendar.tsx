@@ -4,6 +4,8 @@ import { codesFor, coverage, displayCode, rangeWrites, specialDays, uncoveredDay
 import type { CellWrite, Person } from '../domain/types';
 import type { Store } from '../store';
 import type { Run } from './App';
+import { Sheet } from './Sheet';
+import { Avatar } from './look';
 
 interface Props {
   store: Store;
@@ -27,6 +29,7 @@ export function Calendar({ store, year, month, today, onGo, run }: Props) {
       {pending.length > 0 ? (
         <div className="banner">
           <strong>
+            <span className="bicon" aria-hidden>!</span>
             {pending.length} {pending.length === 1 ? 'día sin cubrir' : 'días sin cubrir'}
           </strong>
           <div className="chips">
@@ -39,7 +42,7 @@ export function Calendar({ store, year, month, today, onGo, run }: Props) {
           </div>
         </div>
       ) : (
-        <div className="banner ok">Todo cubierto de aquí a fin de año.</div>
+        <div className="banner ok"><span className="bicon" aria-hidden>✓</span>Todo cubierto de aquí a fin de año.</div>
       )}
 
       <table className="cal">
@@ -47,7 +50,10 @@ export function Calendar({ store, year, month, today, onGo, run }: Props) {
           <tr>
             <th />
             {config.people.map((p) => (
-              <th key={p.name}>{p.name}</th>
+              <th key={p.name}>
+                <Avatar people={config.people} name={p.name} size={28} />
+                <span className="pname">{p.name}</span>
+              </th>
             ))}
           </tr>
         </thead>
@@ -62,7 +68,7 @@ export function Calendar({ store, year, month, today, onGo, run }: Props) {
             return (
               <tr key={date} className={cls}>
                 <th title={sd?.desc}>
-                  <span className="wd">{WEEKDAYS[weekday(date) - 1]}</span> {+date.slice(8)}
+                  <span className="wd">{WEEKDAYS[weekday(date) - 1]}</span> <span className="dn">{+date.slice(8)}</span>
                   {cov.uncovered && <span className="alert" aria-label="Sin cubrir"> !</span>}
                 </th>
                 {config.people.map((p) => {
@@ -147,11 +153,7 @@ function Picker(props: {
   const period = a !== b;
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-label="Elegir código" onClick={(e) => e.stopPropagation()}>
-        <h2>
-          {person.name} · {formatShort(date)}
-        </h2>
+    <Sheet label="Elegir código" title={`${person.name} · ${formatShort(date)}`} onClose={onClose}>
         {note && <p className="muted">{note}</p>}
         <div className="codes">
           {codesFor(store.config, person).map((c) => (
@@ -207,7 +209,6 @@ function Picker(props: {
             Aplicar{writes.length > 1 ? ` a ${writes.length} días` : ''}
           </button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

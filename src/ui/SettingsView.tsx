@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { MONTHS } from '../domain/dates';
+import { hasOfficialDays } from '../domain/defaults';
+import { MONTHS, todayIso } from '../domain/dates';
+import { balances } from '../domain/logic';
 import { teleworkToText, textToTelework } from '../domain/sheet';
 import { type Code, type Person, ROLES, type Role, type SpecialDay } from '../domain/types';
 import type { Store } from '../store';
 import type { Run } from './App';
-import { LegacyImport } from './LegacyImport';
 import { THEMES, getTheme, setTheme } from './theme';
 import { useUnsaved } from './dirty';
 
@@ -126,7 +127,16 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
         <button onClick={() => { setPeople([...people, { name: '', role: 'niño', telework: [], carryMonth: 0, orig: '', tw: '' }]); setDirty(true); }}>
           Añadir persona
         </button>
+        <button disabled={!hasYear || busy || dirty} onClick={() => run(() => store.applyTelework(year))}>
+          Rellenar teletrabajo de {year} según el patrón
+        </button>
+        <p className="muted">
+          {dirty ? 'Guarda los ajustes antes de rellenar. ' : !hasYear ? `No hay hoja de ${year}. ` : ''}
+          Solo rellena días laborables vacíos; no pisa nada de lo ya anotado.
+        </p>
       </section>
+
+      <Quotas store={store} year={year} run={run} />
 
       <section className="card">
         <h2>Códigos</h2>
@@ -163,17 +173,19 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
       </section>
 
       <section className="card">
-        <h2>Festivos y días no lectivos</h2>
+        <h2>Festivos y días no lectivos de {year}</h2>
         <p className="muted">
           Al guardar, los festivos se anotan como F para todas las personas en los días que tengan vacíos. Revisa los
           marcados como «sin confirmar».
         </p>
-        <table className="edit">
+        <table className="edit days">
           <thead>
             <tr><th>Desde</th><th>Hasta</th><th>Tipo</th><th>Descripción</th><th /></tr>
           </thead>
           <tbody>
             {days.map((d, i) => (
+              // Solo los del año elegido arriba (y los nuevos, aún sin fecha); el resto se conserva
+              d.from && !(d.from.slice(0, 4) <= String(year) && (d.to || d.from).slice(0, 4) >= String(year)) ? null :
               <tr key={i}>
                 <td><input type="date" aria-label="Desde" value={d.from} onChange={(e) => edit(days, setDays, i, { from: e.target.value })} /></td>
                 <td><input type="date" aria-label="Hasta" value={d.to} onChange={(e) => edit(days, setDays, i, { to: e.target.value })} /></td>
@@ -192,33 +204,28 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
         <button onClick={() => { setDays([...days, { from: '', to: '', type: 'no lectivo', desc: '' }]); setDirty(true); }}>
           Añadir día
         </button>
-        {store.missingMadridDays(year, days).length > 0 && (
-          <button onClick={() => { setDays([...days, ...store.missingMadridDays(year, days)]); setDirty(true); }}>
-            Añadir festivos de Madrid de {year}
-          </button>
-        )}
+        <button
+          disabled={store.missingMadridDays(year, days).length === 0}
+          onClick={() => { setDays([...days, ...store.missingMadridDays(year, days)]); setDirty(true); }}
+        >
+          {store.missingMadridDays(year, days).length ? `Cargar festivos de Madrid de ${year}` : `Festivos de ${year} ya cargados`}
+        </button>
+        <button disabled={!hasYear || busy || dirty} onClick={() => run(() => store.applySpecialDays(year))}>
+          Anotar en el calendario de {year}
+        </button>
+        <p className="muted">
+          El año es el que elijas arriba con ‹ ›.{' '}
+          {hasOfficialDays(year)
+            ? `Para ${year} se cargan los festivos oficiales.`
+            : `Para ${year} no hay lista oficial en la app: se calculan los habituales (incluida Semana Santa) y van marcados para revisar traslados y cambios del año.`}{' '}
+          Los no lectivos del colegio hay que añadirlos a mano. «Anotar» pone F a todos y VE a los niños en los días
+          vacíos{dirty ? '; guarda antes los ajustes' : ''}.
+        </p>
       </section>
 
       <button className="primary" disabled={!dirty || busy} onClick={save}>
         Guardar ajustes
       </button>
-
-      <section className="card">
-        <h2>Acciones sobre {year}</h2>
-        <p className="muted">Solo rellenan celdas vacías; no pisan nada de lo ya anotado. Guarda antes los ajustes.</p>
-        <button disabled={!hasYear || busy || dirty} onClick={() => run(() => store.applyTelework(year))}>
-          Rellenar teletrabajo según el patrón
-        </button>
-        <button disabled={!hasYear || busy || dirty} onClick={() => run(() => store.applySpecialDays(year))}>
-          Rellenar festivos y no lectivos
-        </button>
-      </section>
-
-      {store.originals
-        .filter((t) => store.years.includes(parseInt(t, 10)))
-        .map((t) => (
-          <LegacyImport key={t} store={store} source={t} run={run} busy={busy || dirty} />
-        ))}
 
       <section className="card">
         <h2>Conexión</h2>
@@ -228,5 +235,68 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
         <button onClick={onDisconnect}>Desconectar / cambiar de hoja</button>
       </section>
     </div>
+  );
+}
+
+/** Días disponibles de cada tipo y persona en el año (se guarda al salir de cada casilla). */
+function Quotas({ store, year, run }: { store: Store; year: number; run: Run }) {
+  const { config } = store;
+  const adults = config.people.filter((p) => p.role === 'adulto');
+  const codes = config.codes.filter((c) => c.role === 'adulto' && c.code !== 'T' && c.code !== 'F');
+  const prevGrid = store.years.includes(year - 1) ? store.grid(year - 1) : undefined;
+  const today = todayIso();
+  const info = new Map(
+    adults.map((p) => [p.name, balances(config, store.grid(year), year, p, today, prevGrid)] as const),
+  );
+  const setQuota = (person: string, code: string, text: string) => {
+    const quotas = config.quotas.filter((q) => !(q.year === year && q.person === person && q.code === code));
+    const n = Number(text.replace(',', '.'));
+    if (text.trim() !== '' && Number.isFinite(n)) quotas.push({ year, person, code, available: n });
+    run(() => store.saveConfigOnly({ ...config, quotas }));
+  };
+  if (!adults.length) return null;
+  return (
+    <section className="card">
+      <h2>Días disponibles en {year}</h2>
+      <p className="muted">
+        Total de días de cada tipo para el año; vacío si no tiene límite. Se guarda al salir de la casilla. Las
+        vacaciones del año anterior (VP) se calculan solas con lo que sobró, salvo que pongas otra cifra.
+      </p>
+      <table className="edit quotas">
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            {adults.map((p) => (
+              <th key={p.name}>{p.name}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {codes.map((c) => (
+            <tr key={c.code}>
+              <td><i style={{ background: c.color }}>{c.code}</i> {c.desc}</td>
+              {adults.map((p) => {
+                const b = info.get(p.name)?.find((x) => x.code.code === c.code);
+                const value = b && !b.auto ? b.available ?? '' : '';
+                return (
+                  <td key={p.name}>
+                    <input
+                      key={`${year}-${b?.available}-${b?.auto}`}
+                      className="short"
+                      inputMode="decimal"
+                      aria-label={`Disponibles ${c.desc} ${p.name}`}
+                      defaultValue={value}
+                      placeholder={b?.auto ? String(b.available) : '–'}
+                      title={b?.auto ? 'Calculado: lo que quedó sin gastar el año anterior' : undefined}
+                      onBlur={(e) => e.target.value !== String(value) && setQuota(p.name, c.code, e.target.value)}
+                    />
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
