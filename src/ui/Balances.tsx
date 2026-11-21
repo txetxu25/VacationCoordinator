@@ -78,12 +78,16 @@ export function Balances({ store, year, today }: { store: Store; year: number; t
                   <div className="mtop">
                     <span className="mname"><i style={{ background: b.code.color }}>{b.code.code}</i> {b.code.desc}</span>
                     <span className={`mleft${(b.remaining ?? 0) < 0 ? ' neg' : ''}`}>
-                      <b>{fmt(b.remaining ?? 0)}</b> de {fmt(b.available ?? 0)} quedan
+                      <b>{fmt(b.remaining ?? 0)}</b> sin usar de {fmt(b.available ?? 0)}
                     </span>
                   </div>
                   <span className="htrack tall">
                     <Seg n={b.spent} of={top} color={b.code.color} />
                     <Seg n={b.planned} of={top} color={b.code.color} planned />
+                  </span>
+                  <span className="msub">
+                    {fmt(b.spent)} {b.spent === 1 ? 'gastado' : 'gastados'}
+                    {b.planned > 0 && <> · {fmt(b.planned)} {b.planned === 1 ? 'planificado' : 'planificados'}</>}
                   </span>
                 </div>
               );

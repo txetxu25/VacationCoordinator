@@ -235,9 +235,9 @@ html, body { overflow-x: hidden; }
 .htrack { display: flex; height: 12px; border-radius: 99px; background: var(--cell-empty); overflow: hidden; flex: 1; }
 .htrack.tall { height: 14px; margin: 6px 0 2px; }
 .htrack > span { height: 100%; }
+/* Planificado: mismo color con rayas claras, bien visible también en tema oscuro */
 .htrack .planned, .key .planned {
-  opacity: 0.5;
-  background-image: repeating-linear-gradient(135deg, transparent 0 4px, rgba(255, 255, 255, 0.55) 4px 7px) !important;
+  background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0 3px, transparent 3px 7px) !important;
 }
 .htrack.stack > span + span { box-shadow: inset 2px 0 0 var(--surface); }
 .hbar { display: grid; grid-template-columns: 8.5em 1fr 2.6em; align-items: center; gap: 8px; padding: 6px 0; }
@@ -382,3 +382,4 @@ button.icon { padding: 6px 0; width: 38px; }
 .cform input[type='color'] { height: 38px; padding: 2px; }
 button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: none; }
 details summary { margin-top: 8px; }
+.msub { display: block; font-size: 0.76rem; color: var(--muted); }
