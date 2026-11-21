@@ -261,6 +261,9 @@ html, body { overflow-x: hidden; }
 .center-text { text-align: center; }
 .quotas td:first-child { font-size: 0.85rem; }
 .quotas td input.short { width: 4em; text-align: center; }
-.edit select { min-width: 6.2em; }
-.edit input[type='date'] { min-width: 8.6em; }
-.edit td:first-child input:not(.short) { min-width: 6.5em; }
+/* Festivos: columnas fijas para que la tabla quepa en el ancho del móvil */
+.edit.days { table-layout: fixed; }
+.edit.days th:nth-child(1), .edit.days th:nth-child(2) { width: 27%; }
+.edit.days th:nth-child(3) { width: 21%; }
+.edit.days th:nth-child(5) { width: 36px; }
+.edit.days input, .edit.days select { width: 100%; min-width: 0; padding-left: 4px; padding-right: 2px; font-size: 0.8rem; }

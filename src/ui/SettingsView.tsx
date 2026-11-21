@@ -178,7 +178,7 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
           Al guardar, los festivos se anotan como F para todas las personas en los días que tengan vacíos. Revisa los
           marcados como «sin confirmar».
         </p>
-        <table className="edit">
+        <table className="edit days">
           <thead>
             <tr><th>Desde</th><th>Hasta</th><th>Tipo</th><th>Descripción</th><th /></tr>
           </thead>
