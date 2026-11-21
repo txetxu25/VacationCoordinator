@@ -267,3 +267,93 @@ html, body { overflow-x: hidden; }
 .edit.days th:nth-child(3) { width: 21%; }
 .edit.days th:nth-child(5) { width: 36px; }
 .edit.days input, .edit.days select { width: 100%; min-width: 0; padding-left: 4px; padding-right: 2px; font-size: 0.8rem; }
+/* ================= Propuesta de diseño ================= */
+:root {
+  --bg: #f3f4f1;
+  --shadow: 0 1px 2px rgba(20, 30, 25, 0.06), 0 6px 18px rgba(20, 30, 25, 0.06);
+  --header-h: calc(64px + env(safe-area-inset-top));
+  --radius: 16px;
+  --brand-soft: #e2f1ec;
+}
+:root[data-theme='dark'] {
+  --bg: #0f1211;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --brand-soft: #1d3a32;
+}
+body { font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+
+/* Cabecera: título grande, fondo translúcido */
+header {
+  background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--text);
+  backdrop-filter: saturate(180%) blur(16px); -webkit-backdrop-filter: saturate(180%) blur(16px);
+  padding: calc(10px + env(safe-area-inset-top)) 16px 8px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+.htitle { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.htitle strong { font-size: 1.65rem; font-weight: 800; letter-spacing: -0.02em; }
+.htitle > span:not(.status) { font-size: 1.1rem; color: var(--muted); font-weight: 600; }
+.status { align-self: center; font-size: 0.7rem; font-weight: 700; padding: 3px 8px; border-radius: 99px; background: var(--brand-soft); color: var(--accent); opacity: 1; }
+.status.busy { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+.monthnav { gap: 8px; }
+.monthnav button {
+  width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 0; background: var(--surface); color: var(--text);
+  box-shadow: var(--shadow); font-size: 1.35rem; line-height: 1;
+}
+.monthnav button.today { width: auto; padding: 0 14px; border-radius: 99px; font-size: 0.85rem; font-weight: 700; color: var(--accent); }
+
+/* Barra inferior con iconos */
+nav {
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  backdrop-filter: saturate(180%) blur(16px); -webkit-backdrop-filter: saturate(180%) blur(16px);
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+nav button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 6px; font-size: 0.7rem; font-weight: 600; background: none; }
+nav button .ico { display: grid; place-items: center; width: 52px; height: 30px; border-radius: 99px; transition: background 0.2s; }
+nav button.active { box-shadow: none; }
+nav button.active .ico { background: var(--brand-soft); }
+
+/* Tarjetas */
+.card, .cal { border-radius: var(--radius); box-shadow: var(--shadow); }
+.card { padding: 14px; }
+.cards { gap: 14px; }
+h2 { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }
+
+/* Avisos */
+.banner { border: 0; border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow); }
+.banner strong { display: flex; align-items: center; gap: 8px; }
+.banner.ok { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.bicon { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: currentColor; flex: none; }
+.banner .bicon { color: var(--danger); }
+.banner .bicon::first-letter { color: #fff; }
+.banner.ok .bicon { color: #2e9e5b; }
+.bicon { font-size: 0.8rem; font-weight: 900; }
+.banner .bicon { color: #fff; background: var(--danger); }
+.banner.ok .bicon { background: #2e9e5b; }
+.chips button { border-radius: 99px; background: var(--surface); border: 0; box-shadow: var(--shadow); font-weight: 600; color: var(--err-fg); }
+
+/* Calendario */
+.avatar { display: inline-grid; place-items: center; border-radius: 50%; color: #fff; font-weight: 800; letter-spacing: -0.02em; flex: none; }
+.cal thead th { padding: 8px 1px 6px; font-weight: 600; }
+.cal thead th .avatar { display: grid; margin: 0 auto 3px; }
+.cal thead th .pname { display: block; font-size: 0.66rem; color: var(--muted); }
+.cal th:first-child { width: 52px; }
+.cal td, .cal th { border-bottom-color: color-mix(in srgb, var(--line) 60%, transparent); }
+.cal .dn { font-weight: 700; }
+.cal tr.today th:first-child { color: var(--accent); }
+.cal tr.today th:first-child .dn { display: inline-grid; place-items: center; min-width: 26px; height: 26px; border-radius: 50%; background: var(--brand); color: #fff; }
+.cal tr.today { background: color-mix(in srgb, var(--brand-soft) 55%, transparent); }
+.cal tr.uncovered { background: color-mix(in srgb, var(--err-bg) 70%, transparent); }
+.cal tr.uncovered th:first-child { background: transparent; }
+.cell { height: 34px; border-radius: 10px; font-weight: 700; font-size: 0.8rem; }
+.cell[style] { box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.08); }
+.legend { gap: 8px 14px; }
+
+/* Vista anual */
+.ylabel { display: flex; align-items: center; gap: 4px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.ycell { height: 14px; border-radius: 3px; }
+.monthtitle { font-size: 1.05rem; }
+
+/* Hoja inferior */
+.sheet { border-radius: 22px 22px 0 0; }
+.codes button { border-radius: 14px; }
