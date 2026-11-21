@@ -357,3 +357,28 @@ h2 { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }
 /* Hoja inferior */
 .sheet { border-radius: 22px 22px 0 0; }
 .codes button { border-radius: 14px; }
+
+/* Ajustes: personas, teletrabajo y códigos en filas en lugar de tablas */
+.plist { display: grid; gap: 8px; margin-bottom: 8px; }
+.prow { display: grid; grid-template-columns: 1fr 7.5em 38px; gap: 6px; align-items: center; padding-bottom: 8px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.prow .sub { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.82rem; color: var(--muted); }
+.prow .sub select { width: auto; }
+button.icon { padding: 6px 0; width: 38px; }
+.twrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; }
+.twname { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.days5 { display: flex; gap: 6px; }
+.days5 button { width: 38px; height: 38px; padding: 0; border-radius: 50%; font-weight: 700; }
+.days5 button.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.cgroup h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 14px 0 4px; }
+.crow { border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.chead { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; padding: 10px 2px; text-align: left; border-radius: 0; }
+.chead i { min-width: 2.4em; }
+.cdesc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cbadge { font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+.crow.open { background: color-mix(in srgb, var(--brand-soft) 35%, transparent); border-radius: 12px; }
+.cform { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 8px 12px; }
+.cform label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
+.cform .wide { grid-column: 1 / -1; }
+.cform input[type='color'] { height: 38px; padding: 2px; }
+button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: none; }
+details summary { margin-top: 8px; }
