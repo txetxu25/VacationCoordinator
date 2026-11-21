@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { hasOfficialDays } from '../domain/defaults';
-import { MONTHS, todayIso } from '../domain/dates';
+import { MONTHS, WEEKDAYS, todayIso } from '../domain/dates';
 import { balances } from '../domain/logic';
 import { teleworkToText, textToTelework } from '../domain/sheet';
 import { type Code, type Person, ROLES, type Role, type SpecialDay } from '../domain/types';
@@ -27,6 +27,7 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
   const [codes, setCodes] = useState<Code[]>(() => store.config.codes.map((c) => ({ ...c })));
   const [days, setDays] = useState<SpecialDay[]>(() => store.config.days.map((d) => ({ ...d })));
   const [dirty, setDirty] = useState(false);
+  const [openCode, setOpenCode] = useState<number | null>(null);
   const [theme, setThemeState] = useState(getTheme);
   useUnsaved(dirty);
 
@@ -38,6 +39,19 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
     set(list.filter((_, j) => j !== i));
     setDirty(true);
   };
+
+  const yearDays = days.filter((d) => d.from && d.from.slice(0, 4) <= String(year) && (d.to || d.from).slice(0, 4) >= String(year));
+  const coverLabel = (c: Code) =>
+    c.role === 'niño' ? (c.weight > 0 ? 'necesita a alguien' : '') : c.weight === 1 ? 'cubre' : c.weight === 0.5 ? 'cubre ½' : '';
+
+  /** Añade los festivos de Madrid del año que falten y los anota en el calendario de ese año. */
+  const loadHolidays = () =>
+    run(async () => {
+      const missing = store.missingMadridDays(year);
+      if (missing.length) await store.saveConfigOnly({ ...store.config, days: [...store.config.days, ...missing] });
+      await store.applySpecialDays(year);
+      setDays(store.config.days.map((d) => ({ ...d })));
+    });
 
   const save = () => {
     const removed = store.config.people.filter((p) => !people.some((r) => r.orig === p.name));
@@ -93,42 +107,64 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
 
       <section className="card">
         <h2>Personas</h2>
-        <p className="muted">Teletrabajo: días habituales con letras L, M, X, J, V separadas por comas. Las vacaciones que sobran de un año
-          pasan solas al siguiente como VP y se pueden gastar hasta el mes indicado.</p>
-        <table className="edit">
-          <thead>
-            <tr><th>Nombre</th><th>Rol</th><th>Teletrabajo</th><th>Vac. año anterior hasta</th><th /></tr>
-          </thead>
-          <tbody>
-            {people.map((p, i) => (
-              <tr key={i}>
-                <td><input aria-label="Nombre" value={p.name} onChange={(e) => edit(people, setPeople, i, { name: e.target.value })} /></td>
-                <td>{roleSelect(p.role, (role) => edit(people, setPeople, i, { role }), 'Rol')}</td>
-                <td>
-                  {p.role === 'adulto' && (
-                    <input aria-label="Teletrabajo" value={p.tw} placeholder="M,V" onChange={(e) => edit(people, setPeople, i, { tw: e.target.value })} />
-                  )}
-                </td>
-                <td>
-                  {p.role === 'adulto' && (
-                    <select aria-label={`Límite vacaciones año anterior ${p.name}`} value={p.carryMonth} onChange={(e) => edit(people, setPeople, i, { carryMonth: +e.target.value })}>
-                      <option value={0}>Sin límite</option>
-                      {MONTHS.map((m, k) => (
-                        <option key={m} value={k + 1}>Fin de {m.toLowerCase()}</option>
-                      ))}
-                    </select>
-                  )}
-                </td>
-                <td><button aria-label={`Quitar ${p.name}`} onClick={() => remove(people, setPeople, i)}>✕</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="plist">
+          {people.map((p, i) => (
+            <div key={i} className="prow">
+              <input aria-label="Nombre" placeholder="Nombre" value={p.name} onChange={(e) => edit(people, setPeople, i, { name: e.target.value })} />
+              {roleSelect(p.role, (role) => edit(people, setPeople, i, { role }), 'Rol')}
+              <button className="icon" aria-label={`Quitar ${p.name}`} onClick={() => remove(people, setPeople, i)}>✕</button>
+              {p.role === 'adulto' && (
+                <label className="sub">
+                  Vacaciones del año anterior hasta
+                  <select aria-label={`Límite vacaciones año anterior ${p.name}`} value={p.carryMonth} onChange={(e) => edit(people, setPeople, i, { carryMonth: +e.target.value })}>
+                    <option value={0}>Sin límite</option>
+                    {MONTHS.map((m, k) => (
+                      <option key={m} value={k + 1}>fin de {m.toLowerCase()}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+          ))}
+        </div>
         <button onClick={() => { setPeople([...people, { name: '', role: 'niño', telework: [], carryMonth: 0, orig: '', tw: '' }]); setDirty(true); }}>
           Añadir persona
         </button>
+      </section>
+
+      <section className="card">
+        <h2>Teletrabajo</h2>
+        <p className="muted">Días habituales de cada uno.</p>
+        {people.map((p, i) =>
+          p.role !== 'adulto' ? null : (
+            <div key={i} className="twrow">
+              <span className="twname">{p.name || 'Sin nombre'}</span>
+              <span className="days5" role="group" aria-label={`Teletrabajo ${p.name}`}>
+                {WEEKDAYS.slice(0, 5).map((d, k) => {
+                  const on = textToTelework(p.tw).includes(k + 1);
+                  return (
+                    <button
+                      key={d}
+                      className={on ? 'on' : ''}
+                      aria-pressed={on}
+                      aria-label={`${d} ${p.name}`}
+                      onClick={() => {
+                        const set = new Set(textToTelework(p.tw));
+                        if (on) set.delete(k + 1);
+                        else set.add(k + 1);
+                        edit(people, setPeople, i, { tw: teleworkToText([...set].sort()) });
+                      }}
+                    >
+                      {d}
+                    </button>
+                  );
+                })}
+              </span>
+            </div>
+          ),
+        )}
         <button disabled={!hasYear || busy || dirty} onClick={() => run(() => store.applyTelework(year))}>
-          Rellenar teletrabajo de {year} según el patrón
+          Rellenar teletrabajo de {year}
         </button>
         <p className="muted">
           {dirty ? 'Guarda los ajustes antes de rellenar. ' : !hasYear ? `No hay hoja de ${year}. ` : ''}
@@ -140,87 +176,123 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
 
       <section className="card">
         <h2>Códigos</h2>
-        <p className="muted">
-          Cobertura: en adultos y abuelos, cuánto cubre (1, 0.5 o 0); en niños, si necesita a alguien (1) o no (0).
-          Los códigos T, F y VE los usa la app para teletrabajo, festivos y no lectivos.
-        </p>
-        <table className="edit">
-          <thead>
-            <tr><th>Cód.</th><th>Descripción</th><th>Rol</th><th>Cob.</th><th>Color</th><th /></tr>
-          </thead>
-          <tbody>
-            {codes.map((c, i) => (
-              <tr key={i}>
-                <td><input className="short" aria-label="Código" value={c.code} onChange={(e) => edit(codes, setCodes, i, { code: e.target.value.toUpperCase() })} /></td>
-                <td><input aria-label="Descripción" value={c.desc} onChange={(e) => edit(codes, setCodes, i, { desc: e.target.value })} /></td>
-                <td>{roleSelect(c.role, (role) => edit(codes, setCodes, i, { role }), 'Rol')}</td>
-                <td>
-                  <select aria-label="Cobertura" value={c.weight} onChange={(e) => edit(codes, setCodes, i, { weight: +e.target.value })}>
-                    <option value={1}>1</option>
-                    <option value={0.5}>0.5</option>
-                    <option value={0}>0</option>
-                  </select>
-                </td>
-                <td><input type="color" aria-label="Color" value={c.color} onChange={(e) => edit(codes, setCodes, i, { color: e.target.value })} /></td>
-                <td><button aria-label={`Quitar ${c.code}`} onClick={() => remove(codes, setCodes, i)}>✕</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <button onClick={() => { setCodes([...codes, { code: '', desc: '', role: 'adulto', weight: 1, color: '#dddddd' }]); setDirty(true); }}>
-          Añadir código
-        </button>
+        <p className="muted">Toca un código para editarlo.</p>
+        {ROLES.map((role) => (
+          <div key={role} className="cgroup">
+            <h3>{role === 'adulto' ? 'Adultos' : role === 'niño' ? 'Niños' : 'Abuelos'}</h3>
+            {codes.map((c, i) =>
+              c.role !== role ? null : (
+                <div key={i} className={`crow${openCode === i ? ' open' : ''}`}>
+                  <button className="chead" aria-expanded={openCode === i} onClick={() => setOpenCode(openCode === i ? null : i)}>
+                    <i style={{ background: c.color }}>{c.code || '?'}</i>
+                    <span className="cdesc">{c.desc || 'Sin descripción'}</span>
+                    <span className="cbadge">{coverLabel(c)}</span>
+                  </button>
+                  {openCode === i && (
+                    <div className="cform">
+                      <label>
+                        Código
+                        <input aria-label="Código" value={c.code} onChange={(e) => edit(codes, setCodes, i, { code: e.target.value.toUpperCase() })} />
+                      </label>
+                      <label>
+                        Color
+                        <input type="color" aria-label="Color" value={c.color} onChange={(e) => edit(codes, setCodes, i, { color: e.target.value })} />
+                      </label>
+                      <label className="wide">
+                        Descripción
+                        <input aria-label="Descripción" value={c.desc} onChange={(e) => edit(codes, setCodes, i, { desc: e.target.value })} />
+                      </label>
+                      <label>
+                        Quién lo usa
+                        {roleSelect(c.role, (r) => edit(codes, setCodes, i, { role: r }), 'Rol')}
+                      </label>
+                      <label>
+                        {c.role === 'niño' ? 'Necesita a alguien' : 'Cubre a los niños'}
+                        <select aria-label="Cobertura" value={c.weight} onChange={(e) => edit(codes, setCodes, i, { weight: +e.target.value })}>
+                          {c.role === 'niño' ? (
+                            <>
+                              <option value={1}>Sí</option>
+                              <option value={0}>No</option>
+                            </>
+                          ) : (
+                            <>
+                              <option value={1}>Día completo</option>
+                              <option value={0.5}>Medio día</option>
+                              <option value={0}>No</option>
+                            </>
+                          )}
+                        </select>
+                      </label>
+                      <button className="danger wide" onClick={() => { setOpenCode(null); remove(codes, setCodes, i); }}>
+                        Quitar código
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ),
+            )}
+            <button
+              className="link"
+              onClick={() => {
+                setCodes([...codes, { code: '', desc: '', role, weight: role === 'niño' ? 1 : 1, color: '#dddddd' }]);
+                setOpenCode(codes.length);
+                setDirty(true);
+              }}
+            >
+              + Añadir código
+            </button>
+          </div>
+        ))}
+        <p className="muted">T, F y VE los usa la app para teletrabajo, festivos y días sin cole.</p>
       </section>
 
       <section className="card">
-        <h2>Festivos y días no lectivos de {year}</h2>
+        <h2>Festivos</h2>
         <p className="muted">
-          Al guardar, los festivos se anotan como F para todas las personas en los días que tengan vacíos. Revisa los
-          marcados como «sin confirmar».
-        </p>
-        <table className="edit days">
-          <thead>
-            <tr><th>Desde</th><th>Hasta</th><th>Tipo</th><th>Descripción</th><th /></tr>
-          </thead>
-          <tbody>
-            {days.map((d, i) => (
-              // Solo los del año elegido arriba (y los nuevos, aún sin fecha); el resto se conserva
-              d.from && !(d.from.slice(0, 4) <= String(year) && (d.to || d.from).slice(0, 4) >= String(year)) ? null :
-              <tr key={i}>
-                <td><input type="date" aria-label="Desde" value={d.from} onChange={(e) => edit(days, setDays, i, { from: e.target.value })} /></td>
-                <td><input type="date" aria-label="Hasta" value={d.to} onChange={(e) => edit(days, setDays, i, { to: e.target.value })} /></td>
-                <td>
-                  <select aria-label="Tipo" value={d.type} onChange={(e) => edit(days, setDays, i, { type: e.target.value as SpecialDay['type'] })}>
-                    <option>festivo</option>
-                    <option>no lectivo</option>
-                  </select>
-                </td>
-                <td><input aria-label="Descripción" value={d.desc} onChange={(e) => edit(days, setDays, i, { desc: e.target.value })} /></td>
-                <td><button aria-label="Quitar día" onClick={() => remove(days, setDays, i)}>✕</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <button onClick={() => { setDays([...days, { from: '', to: '', type: 'no lectivo', desc: '' }]); setDirty(true); }}>
-          Añadir día
-        </button>
-        <button
-          disabled={store.missingMadridDays(year, days).length === 0}
-          onClick={() => { setDays([...days, ...store.missingMadridDays(year, days)]); setDirty(true); }}
-        >
-          {store.missingMadridDays(year, days).length ? `Cargar festivos de Madrid de ${year}` : `Festivos de ${year} ya cargados`}
-        </button>
-        <button disabled={!hasYear || busy || dirty} onClick={() => run(() => store.applySpecialDays(year))}>
-          Anotar en el calendario de {year}
-        </button>
-        <p className="muted">
-          El año es el que elijas arriba con ‹ ›.{' '}
+          {yearDays.length
+            ? `${yearDays.filter((d) => d.type === 'festivo').length} festivos y ${yearDays.filter((d) => d.type === 'no lectivo').length} periodos sin cole en ${year}.`
+            : `Ninguno cargado para ${year}.`}{' '}
           {hasOfficialDays(year)
-            ? `Para ${year} se cargan los festivos oficiales.`
-            : `Para ${year} no hay lista oficial en la app: se calculan los habituales (incluida Semana Santa) y van marcados para revisar traslados y cambios del año.`}{' '}
-          Los no lectivos del colegio hay que añadirlos a mano. «Anotar» pone F a todos y VE a los niños en los días
-          vacíos{dirty ? '; guarda antes los ajustes' : ''}.
+            ? 'Lista oficial de Madrid capital.'
+            : 'No hay lista oficial en la app para este año: se calculan los habituales de Madrid (incluida Semana Santa).'}
         </p>
+        <button className="primary" disabled={!hasYear || busy || dirty} onClick={loadHolidays}>
+          Cargar festivos de {year} en el calendario
+        </button>
+        <p className="muted">
+          {dirty ? 'Guarda antes los ajustes. ' : !hasYear ? `Crea antes la hoja de ${year} en Calendario. ` : ''}
+          Elige el año arriba con ‹ ›. Pone F a todos en los festivos y VE a los niños en los días sin cole, solo
+          donde no haya nada anotado.
+        </p>
+        <details>
+          <summary>Ver o editar la lista de {year}</summary>
+          <table className="edit days">
+            <thead>
+              <tr><th>Desde</th><th>Hasta</th><th>Tipo</th><th>Descripción</th><th /></tr>
+            </thead>
+            <tbody>
+              {days.map((d, i) =>
+                d.from && !(d.from.slice(0, 4) <= String(year) && (d.to || d.from).slice(0, 4) >= String(year)) ? null : (
+                  <tr key={i}>
+                    <td><input type="date" aria-label="Desde" value={d.from} onChange={(e) => edit(days, setDays, i, { from: e.target.value })} /></td>
+                    <td><input type="date" aria-label="Hasta" value={d.to} onChange={(e) => edit(days, setDays, i, { to: e.target.value })} /></td>
+                    <td>
+                      <select aria-label="Tipo" value={d.type} onChange={(e) => edit(days, setDays, i, { type: e.target.value as SpecialDay['type'] })}>
+                        <option>festivo</option>
+                        <option>no lectivo</option>
+                      </select>
+                    </td>
+                    <td><input aria-label="Descripción" value={d.desc} onChange={(e) => edit(days, setDays, i, { desc: e.target.value })} /></td>
+                    <td><button aria-label="Quitar día" onClick={() => remove(days, setDays, i)}>✕</button></td>
+                  </tr>
+                ),
+              )}
+            </tbody>
+          </table>
+          <button onClick={() => { setDays([...days, { from: '', to: '', type: 'no lectivo', desc: '' }]); setDirty(true); }}>
+            Añadir día
+          </button>
+        </details>
       </section>
 
       <button className="primary" disabled={!dirty || busy} onClick={save}>
