@@ -20,17 +20,15 @@ import { type Settings, loadSettings, saveSettings } from './settings';
 
 type Tab = 'calendario' | 'año' | 'saldos' | 'ajustes';
 const TABS: Tab[] = ['calendario', 'año', 'saldos', 'ajustes'];
-/** Dentro de Calendario: las dos próximas semanas o el mes. */
-type CalView = 'próximos' | 'mes';
 type SettingsPage = 'general' | 'permisos';
 
 // Pestaña y mes en pantalla: se conservan si hay que pasar por Google para renovar la sesión.
 const VIEW_KEY = 'vc-view';
-function savedView(): { tab: Tab; cal?: CalView; year: number; month: number } | null {
+function savedView(): { tab: Tab; year: number; month: number } | null {
   try {
     const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? 'null');
     if (v?.tab === 'permiso') v.tab = 'ajustes'; // la pestaña Permiso pasó a Ajustes
-    if (v?.tab === 'próximos') [v.tab, v.cal] = ['calendario', 'próximos']; // Próximos pasó a Calendario
+    if (v?.tab === 'próximos') v.tab = 'calendario'; // Próximos pasó a Calendario
     return v && TABS.includes(v.tab) && v.year && v.month ? v : null;
   } catch {
     return null;
@@ -52,7 +50,6 @@ export function App() {
   const today = todayIso();
   const [view] = useState(savedView);
   const [tab, setTabState] = useState<Tab>(view?.tab ?? 'calendario');
-  const [cal, setCal] = useState<CalView>(view?.cal ?? 'próximos');
   const [page, setPage] = useState<SettingsPage>('general');
   const [slide, setSlide] = useState<'' | 'from-right' | 'from-left'>('');
   // El elemento cambia al cambiar de pestaña (se vuelve a montar para animar): se sigue con estado, no con ref
@@ -85,8 +82,8 @@ export function App() {
   latest.current = { store, year };
 
   useEffect(() => {
-    sessionStorage.setItem(VIEW_KEY, JSON.stringify({ tab, cal, year, month }));
-  }, [tab, cal, year, month]);
+    sessionStorage.setItem(VIEW_KEY, JSON.stringify({ tab, year, month }));
+  }, [tab, year, month]);
 
   /** Renueva la sesión sin preguntar si es posible; si no, enseña el botón de inicio de sesión. */
   const renew = useCallback(() => {
@@ -238,32 +235,12 @@ export function App() {
 
   const hasYear = store.years.includes(year);
   // En «Próximos» manda el año de hoy, no el elegido arriba
-  const upcoming = tab === 'calendario' && cal === 'próximos';
-  const shownYear = upcoming ? +today.slice(0, 4) : year;
-  const monthly = tab === 'calendario' && cal === 'mes';
+  const shownYear = year;
+  const monthly = tab === 'calendario';
   const needsYear = tab === 'calendario' || tab === 'año' || tab === 'saldos';
-  const calSwitch = (
-    <div className="segmented subnav" role="tablist" aria-label="Vista del calendario">
-      {(['próximos', 'mes'] as CalView[]).map((v) => (
-        <button
-          key={v}
-          role="tab"
-          aria-selected={v === cal}
-          className={v === cal ? 'active' : ''}
-          onClick={() => {
-            setCal(v);
-            if (v === 'mes') { setYear(+today.slice(0, 4)); setMonth(+today.slice(5, 7)); }
-          }}
-        >
-          {v === 'próximos' ? 'Próximos días' : 'Mes'}
-        </button>
-      ))}
-    </div>
-  );
   const goTo = (date: string) => {
     setYear(+date.slice(0, 4));
     setMonth(+date.slice(5, 7));
-    setCal('mes');
     setTab('calendario');
   };
   const move = (delta: number) => {
@@ -279,13 +256,13 @@ export function App() {
     <>
       <header>
         <div className="htitle">
-          <strong>{upcoming ? 'Próximos días' : tab === 'ajustes' ? 'Ajustes' : monthly ? MONTHS[month - 1] : year}</strong>
+          <strong>{ tab === 'ajustes' ? 'Ajustes' : monthly ? MONTHS[month - 1] : year}</strong>
           {monthly && <span>{year}</span>}
           {(busy || settings.mode === 'demo') && (
             <span className={`status${busy ? ' busy' : ''}`}>{busy ? 'Guardando…' : 'Demo'}</span>
           )}
         </div>
-        <div className="monthnav" hidden={upcoming}>
+        <div className="monthnav">
           {(monthly ? `${year}-${String(month).padStart(2, '0')}` : String(year)) !== (monthly ? today.slice(0, 7) : today.slice(0, 4)) && (
             <button
               className="today"
@@ -341,14 +318,9 @@ export function App() {
               </button>
             )}
           </div>
-        ) : tab === 'calendario' && cal === 'próximos' ? (
-          <>
-            {calSwitch}
-            <Upcoming store={store} today={today} onGo={goTo} />
-          </>
         ) : tab === 'calendario' ? (
           <>
-          {calSwitch}
+          <Upcoming store={store} today={today} onGo={goTo} />
           <Calendar
             store={store}
             year={year}

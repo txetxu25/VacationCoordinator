@@ -12,7 +12,7 @@
 import { MONTHS, WEEKDAYS, daysInMonth, iso, parseDate } from './dates';
 import {
   type Code, type Config, type DayType, type Grid, LEAVE_UNITS, type LeaveBlock, type LeaveType, type Person,
-  type Quota, type Role, type SchoolPeriod, type SpecialDay,
+  type Quota, type Role, type SpecialDay,
 } from './types';
 
 export const YEAR_HEADER = ['Mes', 'Persona'];
@@ -110,9 +110,8 @@ export const textToTelework = (s: string) =>
     .sort();
 
 /** Columna inicial de cada tabla de la hoja Config (todas caben en A..Z). */
-const COL = { people: 0, codes: 4, quotas: 10, days: 15, settings: 20, schools: 23 };
+const COL = { people: 0, codes: 4, quotas: 10, days: 15, settings: 20 };
 const BIRTH_KEY = 'Nacimiento';
-const CARE_KEY = 'En casa fuera del cole desde: ';
 
 function layout(blocks: [number, string[][]][]): string[][] {
   const height = Math.max(...blocks.map(([, b]) => b.length));
@@ -146,15 +145,7 @@ export function serializeConfig(c: Config): string[][] {
       ],
     ],
     [COL.days, [['Desde', 'Hasta', 'Tipo', 'Descripción'], ...c.days.map((d) => [d.from, d.to, d.type, d.desc])]],
-    [
-      COL.settings,
-      [
-        ['Ajuste', 'Valor'],
-        [BIRTH_KEY, c.birth],
-        ...Object.entries(c.careFrom).filter(([, d]) => d).map(([name, d]) => [CARE_KEY + name, d]),
-      ],
-    ],
-    [COL.schools, [['Cole: persona', 'Desde', 'Hasta'], ...c.schools.map((s) => [s.person, s.from, s.to])]],
+    [COL.settings, [['Ajuste', 'Valor'], [BIRTH_KEY, c.birth]]],
   ]);
 }
 
@@ -216,8 +207,6 @@ export function parseConfig(values: string[][]): Config {
   const quotas: Quota[] = [];
   const days: SpecialDay[] = [];
   let birth = '';
-  const schools: SchoolPeriod[] = [];
-  const careFrom: Record<string, string> = {};
   for (const raw of values.slice(1)) {
     const v = (i: number) => (raw[i] ?? '').trim();
     if (v(0)) {
@@ -247,13 +236,6 @@ export function parseConfig(values: string[][]): Config {
     }
     // la fecha de nacimiento está en U-V (en la versión anterior, en Y-Z)
     for (const col of [COL.settings, 24]) if (norm(v(col)) === norm(BIRTH_KEY)) birth = parseDate(v(col + 1)) ?? birth;
-    if (v(COL.settings).startsWith(CARE_KEY)) {
-      const d = parseDate(v(COL.settings + 1));
-      if (d) careFrom[v(COL.settings).slice(CARE_KEY.length).trim()] = d;
-    }
-    const sFrom = parseDate(v(COL.schools + 1));
-    const sTo = parseDate(v(COL.schools + 2));
-    if (v(COL.schools) && sFrom && sTo) schools.push({ person: v(COL.schools), from: sFrom, to: sTo });
   }
-  return { people, codes, quotas, days, leaveTypes: [], leaves: [], birth, schools, careFrom };
+  return { people, codes, quotas, days, leaveTypes: [], leaves: [], birth };
 }

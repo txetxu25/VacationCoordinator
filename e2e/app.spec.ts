@@ -4,7 +4,6 @@ import { apply, openDemo, sheetCells, tab } from './helpers';
 test.beforeEach(async ({ page }) => {
   await openDemo(page);
   await tab(page, 'Calendario').click();
-  await page.getByRole('tab', { name: 'Mes' }).click();
   await expect(page.locator('table.cal')).toBeVisible();
 });
 
@@ -35,29 +34,17 @@ test('días sin cubrir: aviso y desaparece al cubrirlos', async ({ page }) => {
   await expect(page.locator('.banner').first()).toContainText('Todo cubierto');
 });
 
-test('próximos días muestra niños en casa y huecos', async ({ page }) => {
-  await apply(page, 'Leo', 20, 'Enfermo');
-  await page.getByRole('tab', { name: 'Próximos días' }).click();
-  const row = page.locator('.dayrow', { hasText: '20 nov' });
-  await expect(row).toContainText('enfermo');
+test('cuadro de próximos días encima del mes: bebé en casa sin cubrir', async ({ page }) => {
+  await apply(page, 'Leo', 19, 'En casa (sin guardería)', '2026-11-20');
+  const row = page.locator('.daylist .dayrow', { hasText: '19 nov' });
+  await expect(row).toContainText('Leo');
   await expect(row).toContainText('Sin cubrir');
-  await row.click();
-  await expect(page.locator('header strong')).toHaveText('Noviembre');
-});
-
-test('cole y guardería: fuera del periodo el niño está en casa', async ({ page }) => {
-  await tab(page, 'Ajustes').click();
-  const kid = page.locator('.kid', { hasText: 'Leo' });
-  await kid.getByLabel('En casa fuera del cole desde Leo').fill('2026-11-01');
-  await kid.getByRole('button', { name: '+ Añadir curso' }).click();
-  await kid.getByLabel('Cole desde Leo', { exact: true }).fill('2026-11-24');
-  await kid.getByLabel('Cole hasta Leo', { exact: true }).fill('2027-06-30');
-  await page.getByRole('button', { name: 'Guardar ajustes' }).click();
-  await tab(page, 'Calendario').click();
-  await page.getByRole('tab', { name: 'Mes' }).click();
-  await expect(page.getByLabel(/^Leo, . 19 nov: en casa/)).toBeVisible();
-  await expect(page.getByLabel(/^Leo, . 25 nov$/)).toBeVisible();
-  await expect(page.locator('.banner').first()).toContainText('sin cubrir');
+  await apply(page, 'Mamá', 19, 'Cuidado de menor');
+  await expect(row).toContainText('Cubierto');
+  // el cuadro va encima de la tabla del mes
+  const box = (await page.locator('.daylist').boundingBox())!;
+  const table = (await page.locator('table.cal').boundingBox())!;
+  expect(box.y).toBeLessThan(table.y);
 });
 
 test('deslizar cambia de pestaña y la hoja se cierra arrastrando la barrita', async ({ page }) => {
@@ -88,7 +75,6 @@ test('saldos muestra primero a los adultos y los días disponibles se fijan en a
   await f.fill('25');
   await f.blur();
   await tab(page, 'Calendario').click();
-  await page.getByRole('tab', { name: 'Mes' }).click();
   await apply(page, 'Papá', 23, 'Vacaciones', '2026-11-24');
   await tab(page, 'Saldos').click();
   const heads = await page.locator('.stats > section h2').allInnerTexts();

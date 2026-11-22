@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { WEEKDAYS, daysInMonth, formatShort, isWeekend, iso, weekday } from '../domain/dates';
-import { atHome, codesFor, coverage, displayCode, rangeWrites, specialDays, uncoveredDays } from '../domain/logic';
+import { codesFor, coverage, displayCode, rangeWrites, specialDays, uncoveredDays } from '../domain/logic';
 import type { CellWrite, Person } from '../domain/types';
 import type { Store } from '../store';
 import type { Run } from './App';
@@ -81,17 +81,16 @@ export function Calendar({ store, year, month, today, onGo, run }: Props) {
                 {config.people.map((p) => {
                   const code = grid[p.name]?.[date] ?? '';
                   const def = code ? displayCode(config, p, code) : undefined;
-                  const home = !code && atHome(config, p, date);
                   return (
                     <td key={p.name}>
                       <button
-                        className={`cell${home ? ' home' : ''}`}
+                        className="cell"
                         style={code ? { background: def?.color ?? '#ddd' } : undefined}
                         title={def?.desc}
-                        aria-label={`${p.name}, ${formatShort(date)}${code ? `: ${def?.desc ?? code}` : home ? ': en casa' : ''}`}
+                        aria-label={`${p.name}, ${formatShort(date)}${code ? `: ${def?.desc ?? code}` : ''}`}
                         onClick={() => setPick({ person: p, date })}
                       >
-                        {code || (home ? 'casa' : '')}
+                        {code}
                       </button>
                     </td>
                   );

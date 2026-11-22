@@ -3,7 +3,7 @@ import { hasOfficialDays } from '../domain/defaults';
 import { MONTHS, WEEKDAYS, todayIso } from '../domain/dates';
 import { balances } from '../domain/logic';
 import { teleworkToText, textToTelework } from '../domain/sheet';
-import { type Code, type Person, ROLES, type Role, type SchoolPeriod, type SpecialDay } from '../domain/types';
+import { type Code, type Person, ROLES, type Role, type SpecialDay } from '../domain/types';
 import type { Store } from '../store';
 import type { Run } from './App';
 import { THEMES, getTheme, setTheme } from './theme';
@@ -28,8 +28,6 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
   const [days, setDays] = useState<SpecialDay[]>(() => store.config.days.map((d) => ({ ...d })));
   const [dirty, setDirty] = useState(false);
   const [openCode, setOpenCode] = useState<number | null>(null);
-  const [schools, setSchools] = useState<SchoolPeriod[]>(() => store.config.schools.map((s) => ({ ...s })));
-  const [careFrom, setCareFrom] = useState<Record<string, string>>(() => ({ ...store.config.careFrom }));
   const [theme, setThemeState] = useState(getTheme);
   useUnsaved(dirty);
 
@@ -72,8 +70,6 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
           })),
           codes: codes.filter((c) => c.code.trim()).map((c) => ({ ...c, code: c.code.trim() })),
           days: days.filter((d) => d.from).map((d) => ({ ...d, to: d.to && d.to >= d.from ? d.to : d.from })),
-          schools: schools.filter((s) => s.from && s.to && s.to >= s.from),
-          careFrom: Object.fromEntries(Object.entries(careFrom).filter(([, d]) => d)),
         },
         renames,
       );
@@ -174,57 +170,6 @@ export function SettingsView({ store, year, hasYear, busy, run, onDisconnect }: 
           {dirty ? 'Guarda los ajustes antes de rellenar. ' : !hasYear ? `No hay hoja de ${year}. ` : ''}
           Solo rellena días laborables vacíos; no pisa nada de lo ya anotado.
         </p>
-      </section>
-
-      <section className="card">
-        <h2>Cole y guardería</h2>
-        <p className="muted">
-          En los periodos que pongas, el niño está en el cole o la guardería y se da por cubierto. Fuera de ellos, a
-          partir de «En casa fuera del cole desde», la app entiende que está en casa y avisa si nadie lo cubre. Los
-          días sin cole dentro del curso se siguen marcando con VE.
-        </p>
-        {people.map((p) =>
-          p.role !== 'niño' || !p.name.trim() ? null : (
-            <div key={p.orig || p.name} className="kid">
-              <strong>{p.name}</strong>
-              <label className="sub">
-                En casa fuera del cole desde
-                <input
-                  type="date"
-                  aria-label={`En casa fuera del cole desde ${p.name}`}
-                  value={careFrom[p.orig || p.name] ?? ''}
-                  onChange={(e) => { setCareFrom({ ...careFrom, [p.orig || p.name]: e.target.value }); setDirty(true); }}
-                />
-              </label>
-              {schools.map((s, i) =>
-                s.person !== (p.orig || p.name) ? null : (
-                  <div key={i} className="srow">
-                    <input type="date" aria-label={`Cole desde ${p.name}`} value={s.from} onChange={(e) => edit(schools, setSchools, i, { from: e.target.value })} />
-                    <span>a</span>
-                    <input type="date" aria-label={`Cole hasta ${p.name}`} value={s.to} onChange={(e) => edit(schools, setSchools, i, { to: e.target.value })} />
-                    <button className="icon" aria-label="Quitar periodo" onClick={() => remove(schools, setSchools, i)}>✕</button>
-                  </div>
-                ),
-              )}
-              <button
-                className="link"
-                onClick={() => {
-                  const key = p.orig || p.name;
-                  const t = todayIso();
-                  const y = +t.slice(5, 7) >= 7 ? +t.slice(0, 4) : +t.slice(0, 4) - 1;
-                  const last = schools.filter((s) => s.person === key).map((s) => +s.to.slice(0, 4)).sort().pop();
-                  const start = last ? last : y;
-                  const from = `${start}-09-01`;
-                  setSchools([...schools, { person: key, from, to: `${start + 1}-06-30` }]);
-                  if (!careFrom[key]) setCareFrom({ ...careFrom, [key]: from });
-                  setDirty(true);
-                }}
-              >
-                + Añadir curso
-              </button>
-            </div>
-          ),
-        )}
       </section>
 
       <Quotas store={store} year={year} run={run} />

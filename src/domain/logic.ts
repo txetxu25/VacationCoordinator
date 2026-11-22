@@ -51,31 +51,13 @@ export function coverage(config: Config, grid: Grid, date: string): Coverage {
   if (!isWeekend(date)) {
     for (const p of config.people) {
       const code = grid[p.name]?.[date];
-      if (!code) {
-        if (atHome(config, p, date)) need = 1;
-        continue;
-      }
+      if (!code) continue;
       const w = findCode(config, p, code)?.weight ?? 0;
       if (p.role === 'niño') need = Math.max(need, w);
       else cover += w;
     }
   }
   return { need, cover, uncovered: need > 0 && cover < 1 };
-}
-
-const holidayCache = new WeakMap<Config, (date: string) => boolean>();
-
-/**
- * Niño sin nada anotado ese día laborable: está en casa si ya cuenta la regla (desde su fecha de
- * «en casa fuera del cole») y la fecha no cae en ningún periodo de cole o guardería suyo.
- */
-export function atHome(config: Config, person: Person, date: string): boolean {
-  if (person.role !== 'niño') return false;
-  const from = config.careFrom?.[person.name];
-  if (!from || date < from || isWeekend(date)) return false;
-  if (config.schools?.some((s) => s.person === person.name && s.from <= date && date <= s.to)) return false;
-  if (!holidayCache.has(config)) holidayCache.set(config, holidayChecker(config));
-  return !holidayCache.get(config)!(date);
 }
 
 export function uncoveredDays(config: Config, grid: Grid, year: number, from = ''): string[] {

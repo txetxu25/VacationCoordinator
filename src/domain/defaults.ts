@@ -29,6 +29,7 @@ export const DEFAULT_CODES: Code[] = [
   { code: 'VE', desc: 'Sin cole (vacaciones / no lectivo)', role: 'niño', weight: 1, color: '#fff3a0' },
   { code: 'E', desc: 'Enfermo', role: 'niño', weight: 1, color: '#ff9d7a' },
   { code: 'CP', desc: 'Campamento', role: 'niño', weight: 0, color: '#b5ecf3' },
+  { code: 'CA', desc: 'En casa (sin guardería)', role: 'niño', weight: 1, color: '#ffd6a5' },
   { code: 'F', desc: 'Festivo', role: 'niño', weight: 1, color: '#dcdcdc' },
   { code: 'A1', desc: 'Abuelo/a 1', role: 'abuelos', weight: 1, color: '#d9c8bf' },
   { code: 'A2', desc: 'Abuelo/a 2', role: 'abuelos', weight: 1, color: '#c9b6e0' },
@@ -99,7 +100,5 @@ export function defaultConfig(): Config {
     leaveTypes: [],
     leaves: [],
     birth: '',
-    schools: [],
-    careFrom: {},
   };
 }

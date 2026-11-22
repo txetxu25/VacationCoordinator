@@ -240,10 +240,6 @@ export class Store {
       quotas: config.quotas.map((q) => ({ ...q, person: rn(q.person) })).filter((q) => names.has(q.person)),
       leaveTypes: config.leaveTypes.map((t) => ({ ...t, person: rn(t.person) })).filter((t) => names.has(t.person)),
       leaves: config.leaves.map((l) => ({ ...l, person: rn(l.person) })).filter((l) => names.has(l.person)),
-      schools: config.schools.map((s) => ({ ...s, person: rn(s.person) })).filter((s) => names.has(s.person)),
-      careFrom: Object.fromEntries(
-        Object.entries(config.careFrom).map(([k, v]) => [rn(k), v] as const).filter(([k, v]) => names.has(k) && v),
-      ),
     };
     await this.saveConfigOnly(config);
     await this.writeLeaveSheet();

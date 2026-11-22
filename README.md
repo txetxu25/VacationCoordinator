@@ -7,8 +7,7 @@ Toda la información se guarda en una hoja de cálculo de Google (la app no tien
 
 ## Cómo funciona
 
-- **Próximos**: las dos próximas semanas, con quién está fuera, qué niños están en casa y qué falta por cubrir.
-- **Calendario**: una fila por día y una columna por persona. Se toca una celda, se elige el código y,
+- **Calendario**: arriba, un cuadro con los próximos 7 días (quién está fuera, qué niño necesita a alguien y si está cubierto); debajo, el mes, con una fila por día y una columna por persona. Se toca una celda, se elige el código y,
   si hace falta, una fecha «hasta» para rellenar un rango (salta fines de semana y festivos).
 - **Días sin cubrir**: un laborable está sin cubrir si algún niño necesita a alguien (sin cole, enfermo,
   festivo) y la cobertura de adultos y abuelos no suma 1. El teletrabajo no cubre; la baja sí; dos medias
@@ -81,12 +80,10 @@ npm run build
 Los festivos precargados corresponden a Madrid capital 2027. Los festivos locales y los días no lectivos
 están marcados como «sin confirmar» y conviene revisarlos contra el BOCM y el calendario del centro.
 
-## Cole y guardería
+## Bebé hasta la guardería
 
-En Ajustes se indican, por niño, los periodos de cole o guardería y la fecha desde la que cuenta la regla
-«fuera de esos periodos está en casa». Los días laborables fuera de esos periodos sin nada anotado se
-consideran días en casa y la app avisa si nadie los cubre. Los periodos se guardan en `Config` (X-Z) y la
-fecha en los ajustes (U-V).
+El código `CA · En casa (sin guardería)` (niños, necesita a alguien) se aplica como periodo a la bebé desde
+el nacimiento hasta que empiece la guardería; esos días entran en el aviso de días sin cubrir.
 
 ## Publicación y actualización
 
