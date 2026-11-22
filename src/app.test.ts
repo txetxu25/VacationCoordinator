@@ -3,9 +3,9 @@ import { MemoryBackend } from './backend/memory';
 import { defaultConfig } from './domain/defaults';
 import { parseDate, weekday } from './domain/dates';
 import { guessMapping, parseLegacy } from './domain/legacy';
-import { analyzeLeave, blockEnd, hasOverlap, timeline } from './domain/leave';
+import { analyzeLeave, blockEnd, hasOverlap, leaveProgress, timeline } from './domain/leave';
 import type { LeaveType } from './domain/types';
-import { codeCounts, coverers } from './domain/stats';
+import { codeCounts, coverers, monthly, nextAbsence } from './domain/stats';
 import { computedMadridHolidays, easter } from './domain/holidays';
 import { balances, coverage, specialDays, uncoveredDays } from './domain/logic';
 import { buildYear, colLetter, parseConfig, parseYear, serializeConfig, textToTelework } from './domain/sheet';
@@ -69,6 +69,14 @@ describe('cobertura y saldos', () => {
     expect(coverage(c, { Ana: { '2027-02-13': 'VE' } }, '2027-02-13').uncovered).toBe(false); // sábado
   });
 
+  it('bebé en casa hasta la guardería: código CA, necesita a alguien', () => {
+    const d = '2027-01-14';
+    const un = (grid: Grid) => coverage(c, grid, d).uncovered;
+    expect(un({ Ana: { [d]: 'CA' } })).toBe(true);
+    expect(un({ Ana: { [d]: 'CA' }, Papá: { [d]: 'PN' } })).toBe(false);
+    expect(un({ Ana: { [d]: 'CA' }, Papá: { [d]: 'T' } })).toBe(true);
+  });
+
   it('saldos: gastados, planificados y restantes', () => {
     const cq = { ...c, quotas: [{ year: 2027, person: 'Papá', code: 'V', available: 25 }] };
     const grid: Grid = { Papá: { '2027-03-01': 'V', '2027-03-02': 'V', '2027-08-02': 'V', '2027-08-03': 'T' } };
@@ -120,6 +128,30 @@ describe('cobertura y saldos', () => {
     expect(tl[0]).toEqual({ start: '2027-02-10', on: [true, true] });
     expect(tl[6].on).toEqual([true, false]);
     expect(tl[16].on).toEqual([false, false]);
+  });
+
+  it('progreso del permiso: disfrutado, planificado y sin planificar', () => {
+    const t = birthLeave('Papá');
+    const blocks = [block('Papá', '2027-02-10', 6), block('Papá', '2027-06-07', 4)];
+    // a mitad del primer bloque (3 semanas cumplidas)
+    const p = leaveProgress(t, blocks, '2027-03-02');
+    expect(p.done).toBeCloseTo(3, 5);
+    expect(p.planned).toBeCloseTo(7, 5);
+    expect(p.free).toBeCloseTo(9, 5);
+    expect(p.next).toEqual({ start: '2027-02-10', end: '2027-03-23' });
+    expect(leaveProgress(t, blocks, '2027-04-01').next?.start).toBe('2027-06-07');
+  });
+
+  it('estadísticas: ausencias por mes y próxima ausencia', () => {
+    const grid: Grid = {
+      Papá: { '2027-03-01': 'V', '2027-03-05': 'T', '2027-07-30': 'V', '2027-08-02': 'V', '2027-08-03': 'V', '2027-08-04': 'B' },
+    };
+    const m = monthly(c, grid, 2027, c.people[2], '2027-06-01');
+    expect(m[2]).toEqual({ spent: 1, planned: 0 }); // el teletrabajo no cuenta
+    expect(m[7]).toEqual({ spent: 0, planned: 3 });
+    const n = nextAbsence(c, () => grid, c.people[2], '2027-06-01');
+    expect(n).toMatchObject({ from: '2027-07-30', to: '2027-08-03', days: 3, inDays: 59 }); // el finde no corta
+    expect(n?.code.code).toBe('V');
   });
 
   it('permisos distintos por persona: duración, unidad y media jornada', () => {

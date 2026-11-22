@@ -7,7 +7,7 @@ Toda la información se guarda en una hoja de cálculo de Google (la app no tien
 
 ## Cómo funciona
 
-- **Calendario**: una fila por día y una columna por persona. Se toca una celda, se elige el código y,
+- **Calendario**: arriba, un cuadro con los próximos 7 días (quién está fuera, qué niño necesita a alguien y si está cubierto); debajo, el mes, con una fila por día y una columna por persona. Se toca una celda, se elige el código y,
   si hace falta, una fecha «hasta» para rellenar un rango (salta fines de semana y festivos).
 - **Días sin cubrir**: un laborable está sin cubrir si algún niño necesita a alguien (sin cole, enfermo,
   festivo) y la cobertura de adultos y abuelos no suma 1. El teletrabajo no cubre; la baja sí; dos medias
@@ -73,8 +73,20 @@ permiso a los 7 días y pedirá confirmarlo de nuevo; para evitarlo hay que pasa
 npm install
 npm run dev     # servidor local; «Probar en modo demo» funciona sin Google
 npm test        # tests de la lógica y del almacenamiento
+npm run e2e     # pruebas de la interfaz con Playwright (modo demo, pantalla de iPhone)
 npm run build
 ```
 
 Los festivos precargados corresponden a Madrid capital 2027. Los festivos locales y los días no lectivos
 están marcados como «sin confirmar» y conviene revisarlos contra el BOCM y el calendario del centro.
+
+## Bebé hasta la guardería
+
+El código `CA · En casa (sin guardería)` (niños, necesita a alguien) se aplica como periodo a la bebé desde
+el nacimiento hasta que empiece la guardería; esos días entran en el aviso de días sin cubrir.
+
+## Publicación y actualización
+
+El workflow ejecuta las pruebas de lógica y de interfaz en cada PR y en `main`; solo publica si pasan.
+Cada compilación publica un `version.json`; la app lo consulta al abrirse y, si hay una versión nueva, se
+recarga sola (o avisa si hay cambios sin guardar).

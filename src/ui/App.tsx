@@ -12,8 +12,10 @@ import { SettingsView } from './SettingsView';
 import { Setup } from './Setup';
 import { confirmLeave, hasUnsavedChanges } from './dirty';
 import { useSwipe } from './swipe';
+import { newerBuild, reloadTo } from './update';
 import { YearView } from './YearView';
-import { Icon } from './look';
+import { Upcoming } from './Upcoming';
+import { TabBar } from './TabBar';
 import { type Settings, loadSettings, saveSettings } from './settings';
 
 type Tab = 'calendario' | 'año' | 'saldos' | 'ajustes';
@@ -26,6 +28,7 @@ function savedView(): { tab: Tab; year: number; month: number } | null {
   try {
     const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? 'null');
     if (v?.tab === 'permiso') v.tab = 'ajustes'; // la pestaña Permiso pasó a Ajustes
+    if (v?.tab === 'próximos') v.tab = 'calendario'; // Próximos pasó a Calendario
     return v && TABS.includes(v.tab) && v.year && v.month ? v : null;
   } catch {
     return null;
@@ -40,6 +43,7 @@ export function App() {
   const [store, setStore] = useState<Store | null>(null);
   const [needLogin, setNeedLogin] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [newBuild, setNewBuild] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [, setVersion] = useState(0);
@@ -169,6 +173,19 @@ export function App() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [store, year, run, renew, settings]);
 
+  // ¿Hay una versión nueva publicada? Se mira al abrir y cada vez que se vuelve a la app.
+  useEffect(() => {
+    const check = async () => {
+      const build = await newerBuild();
+      if (!build) return;
+      if (hasUnsavedChanges() || !reloadTo(build)) setNewBuild(build);
+    };
+    check();
+    const onVisible = () => document.visibilityState === 'visible' && check();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
   // Renovar la sesión poco antes de que caduque el token, sin esperar a que falle una operación
   useEffect(() => {
     if (!store || settings.mode !== 'google') return;
@@ -217,6 +234,8 @@ export function App() {
     );
 
   const hasYear = store.years.includes(year);
+  // En «Próximos» manda el año de hoy, no el elegido arriba
+  const shownYear = year;
   const monthly = tab === 'calendario';
   const needsYear = tab === 'calendario' || tab === 'año' || tab === 'saldos';
   const goTo = (date: string) => {
@@ -237,7 +256,7 @@ export function App() {
     <>
       <header>
         <div className="htitle">
-          <strong>{tab === 'ajustes' ? 'Ajustes' : monthly ? MONTHS[month - 1] : year}</strong>
+          <strong>{ tab === 'ajustes' ? 'Ajustes' : monthly ? MONTHS[month - 1] : year}</strong>
           {monthly && <span>{year}</span>}
           {(busy || settings.mode === 'demo') && (
             <span className={`status${busy ? ' busy' : ''}`}>{busy ? 'Guardando…' : 'Demo'}</span>
@@ -262,6 +281,12 @@ export function App() {
           {error}
         </p>
       )}
+      {newBuild && (
+        <p className="warn">
+          Hay una versión nueva de la app.{' '}
+          <button onClick={() => confirmLeave() && reloadTo(newBuild, true)}>Actualizar</button>
+        </p>
+      )}
       {expired && (
         <p className="warn">
           La sesión de Google necesita renovarse y hay cambios sin guardar, que se perderán al hacerlo.{' '}
@@ -275,15 +300,15 @@ export function App() {
       )}
 
       <main ref={setMainEl} key={tab} className={slide}>
-        {!hasYear && needsYear ? (
+        {!store.years.includes(shownYear) && needsYear ? (
           <div className="center">
-            {store.legacy.includes(String(year)) ? (
-              <LegacyImport store={store} source={String(year)} run={run} busy={busy} />
+            {store.legacy.includes(String(shownYear)) ? (
+              <LegacyImport store={store} source={String(shownYear)} run={run} busy={busy} />
             ) : (
               <>
-                <p>Todavía no existe la hoja {year}.</p>
-                <button className="primary" disabled={busy} onClick={() => run(() => store.createYear(year))}>
-                  Crear hoja {year}
+                <p>Todavía no existe la hoja {shownYear}.</p>
+                <button className="primary" disabled={busy} onClick={() => run(() => store.createYear(shownYear))}>
+                  Crear hoja {shownYear}
                 </button>
               </>
             )}
@@ -294,6 +319,8 @@ export function App() {
             )}
           </div>
         ) : tab === 'calendario' ? (
+          <>
+          <Upcoming store={store} today={today} onGo={goTo} />
           <Calendar
             store={store}
             year={year}
@@ -302,6 +329,7 @@ export function App() {
             onGo={goTo}
             run={run}
           />
+          </>
         ) : tab === 'año' ? (
           <YearView store={store} year={year} today={today} onGo={goTo} />
         ) : tab === 'saldos' ? (
@@ -337,14 +365,12 @@ export function App() {
         )}
       </main>
 
-      <nav>
-        {TABS.map((t) => (
-          <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>
-            <span className="ico"><Icon name={t} /></span>
-            {t[0].toUpperCase() + t.slice(1)}
-          </button>
-        ))}
-      </nav>
+      <TabBar
+        tabs={TABS}
+        active={tab}
+        label={(t) => t[0].toUpperCase() + t.slice(1)}
+        onSelect={setTab}
+      />
     </>
   );
 }

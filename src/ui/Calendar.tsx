@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { WEEKDAYS, daysInMonth, formatShort, isWeekend, iso, weekday } from '../domain/dates';
 import { codesFor, coverage, displayCode, rangeWrites, specialDays, uncoveredDays } from '../domain/logic';
 import type { CellWrite, Person } from '../domain/types';
@@ -18,6 +18,13 @@ interface Props {
 
 export function Calendar({ store, year, month, today, onGo, run }: Props) {
   const [pick, setPick] = useState<{ person: Person; date: string } | null>(null);
+  // Lo que había antes del último cambio, para poder deshacerlo durante unos segundos
+  const [undo, setUndo] = useState<{ prev: CellWrite[]; n: number } | null>(null);
+  useEffect(() => {
+    if (!undo) return;
+    const t = setTimeout(() => setUndo(null), 10_000);
+    return () => clearTimeout(t);
+  }, [undo]);
   const { config } = store;
   const grid = store.grid(year);
   const special = specialDays(config, year);
@@ -114,9 +121,26 @@ export function Calendar({ store, year, month, today, onGo, run }: Props) {
           onClose={() => setPick(null)}
           onApply={(writes) => {
             setPick(null);
+            const prev = writes.map((w) => ({ ...w, code: store.grid(+w.date.slice(0, 4))[w.person]?.[w.date] ?? '' }));
+            setUndo({ prev, n: writes.length });
             run(() => store.setCells(writes));
           }}
         />
+      )}
+
+      {undo && (
+        <div className="toast" role="status">
+          <span>{undo.n === 1 ? 'Día actualizado' : `${undo.n} días actualizados`}</span>
+          <button
+            onClick={() => {
+              const { prev } = undo;
+              setUndo(null);
+              run(() => store.setCells(prev));
+            }}
+          >
+            Deshacer
+          </button>
+        </div>
       )}
     </>
   );

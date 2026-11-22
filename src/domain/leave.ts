@@ -143,3 +143,28 @@ export function timeline(birth: string, plan: Plan, people: string[], isHoliday?
   }
   return weeks;
 }
+
+export interface LeaveProgress {
+  done: number; // ya disfrutado (hasta hoy), en la unidad del permiso
+  planned: number; // planificado para después de hoy
+  free: number; // sin planificar
+  next?: { start: string; end: string }; // bloque en curso o próximo
+}
+
+/** Cuánto permiso se ha disfrutado ya, cuánto queda planificado y cuánto falta por planificar. */
+export function leaveProgress(t: LeaveType, blocks: LeaveBlock[], today: string, isHoliday?: IsHoliday): LeaveProgress {
+  let done = 0;
+  let planned = 0;
+  let next: LeaveProgress['next'];
+  for (const b of blocks) {
+    if (b.person !== t.person || b.type !== t.name) continue;
+    const dates = blockDates(b, t, isHoliday);
+    if (!dates.length) continue;
+    const past = dates.filter((d) => d <= today).length / dates.length;
+    done += past * blockUse(b);
+    planned += (1 - past) * blockUse(b);
+    const end = dates[dates.length - 1];
+    if (end >= today && (!next || dates[0] < next.start)) next = { start: dates[0], end };
+  }
+  return { done, planned, free: t.amount - done - planned, next };
+}
