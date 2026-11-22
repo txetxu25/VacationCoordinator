@@ -99,5 +99,7 @@ export function defaultConfig(): Config {
     leaveTypes: [],
     leaves: [],
     birth: '',
+    schools: [],
+    careFrom: {},
   };
 }

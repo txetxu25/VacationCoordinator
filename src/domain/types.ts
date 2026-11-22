@@ -77,6 +77,19 @@ export interface Config {
   leaves: LeaveBlock[];
   /** Fecha de nacimiento (prevista), ISO o '' */
   birth: string;
+  /** Periodos en que cada niño está en el cole o la guardería (cubiertos en principio) */
+  schools: SchoolPeriod[];
+  /**
+   * Por niño: desde qué fecha cuenta la regla «fuera del cole o la guardería está en casa».
+   * Sin fecha, el niño solo necesita a alguien los días con código (como hasta ahora).
+   */
+  careFrom: Record<string, string>;
+}
+
+export interface SchoolPeriod {
+  person: string;
+  from: string; // ISO
+  to: string; // ISO
 }
 
 /** persona -> fecha ISO -> código */

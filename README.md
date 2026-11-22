@@ -7,6 +7,7 @@ Toda la información se guarda en una hoja de cálculo de Google (la app no tien
 
 ## Cómo funciona
 
+- **Próximos**: las dos próximas semanas, con quién está fuera, qué niños están en casa y qué falta por cubrir.
 - **Calendario**: una fila por día y una columna por persona. Se toca una celda, se elige el código y,
   si hace falta, una fecha «hasta» para rellenar un rango (salta fines de semana y festivos).
 - **Días sin cubrir**: un laborable está sin cubrir si algún niño necesita a alguien (sin cole, enfermo,
@@ -73,8 +74,22 @@ permiso a los 7 días y pedirá confirmarlo de nuevo; para evitarlo hay que pasa
 npm install
 npm run dev     # servidor local; «Probar en modo demo» funciona sin Google
 npm test        # tests de la lógica y del almacenamiento
+npm run e2e     # pruebas de la interfaz con Playwright (modo demo, pantalla de iPhone)
 npm run build
 ```
 
 Los festivos precargados corresponden a Madrid capital 2027. Los festivos locales y los días no lectivos
 están marcados como «sin confirmar» y conviene revisarlos contra el BOCM y el calendario del centro.
+
+## Cole y guardería
+
+En Ajustes se indican, por niño, los periodos de cole o guardería y la fecha desde la que cuenta la regla
+«fuera de esos periodos está en casa». Los días laborables fuera de esos periodos sin nada anotado se
+consideran días en casa y la app avisa si nadie los cubre. Los periodos se guardan en `Config` (X-Z) y la
+fecha en los ajustes (U-V).
+
+## Publicación y actualización
+
+El workflow ejecuta las pruebas de lógica y de interfaz en cada PR y en `main`; solo publica si pasan.
+Cada compilación publica un `version.json`; la app lo consulta al abrirse y, si hay una versión nueva, se
+recarga sola (o avisa si hay cambios sin guardar).

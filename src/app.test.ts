@@ -69,6 +69,26 @@ describe('cobertura y saldos', () => {
     expect(coverage(c, { Ana: { '2027-02-13': 'VE' } }, '2027-02-13').uncovered).toBe(false); // sábado
   });
 
+  it('cole y guardería: fuera de sus periodos, el niño está en casa', () => {
+    const cfg2: Config = {
+      ...c,
+      careFrom: { Ana: '2027-01-14' },
+      schools: [{ person: 'Ana', from: '2027-09-06', to: '2028-06-23' }],
+    };
+    const un = (grid: Grid, d: string) => coverage(cfg2, grid, d).uncovered;
+    expect(un({}, '2027-01-13')).toBe(false); // antes de la fecha desde la que cuenta
+    expect(un({}, '2027-01-14')).toBe(true); // en casa, nadie anotado
+    expect(un({}, '2027-01-16')).toBe(false); // sábado
+    expect(un({}, '2027-03-19')).toBe(false); // festivo
+    expect(un({ Papá: { '2027-01-14': 'PN' } }, '2027-01-14')).toBe(false); // cubierto por el permiso
+    expect(un({ Papá: { '2027-01-14': 'T' } }, '2027-01-14')).toBe(true); // teletrabajo no cubre
+    expect(un({}, '2027-09-07')).toBe(false); // en la guardería
+    expect(un({ Ana: { '2027-09-07': 'E' } }, '2027-09-07')).toBe(true); // malo: lo anotado manda
+    expect(un({ Ana: { '2027-07-05': 'CP' } }, '2027-07-05')).toBe(false); // campamento
+    expect(uncoveredDays(cfg2, {}, 2027, '2027-09-01')).toEqual(['2027-09-01', '2027-09-02', '2027-09-03']);
+    expect(uncoveredDays(cfg2, {}, 2027).length).toBeGreaterThan(100);
+  });
+
   it('saldos: gastados, planificados y restantes', () => {
     const cq = { ...c, quotas: [{ year: 2027, person: 'Papá', code: 'V', available: 25 }] };
     const grid: Grid = { Papá: { '2027-03-01': 'V', '2027-03-02': 'V', '2027-08-02': 'V', '2027-08-03': 'T' } };
@@ -378,6 +398,22 @@ describe('store sobre una hoja simulada', () => {
     expect(store.missingMadridDays(2026, [])).toHaveLength(12);
   });
 
+  it('guarda y vuelve a leer periodos de cole y la fecha de «en casa»', async () => {
+    const { be, store } = await setup();
+    await store.saveConfig({
+      ...store.config,
+      schools: [{ person: 'Ana', from: '2026-09-07', to: '2027-06-18' }],
+      careFrom: { Ana: '2026-09-07' },
+    });
+    const people = store.config.people.map((p) => (p.name === 'Ana' ? { ...p, name: 'Ana María' } : p));
+    await store.saveConfig({ ...store.config, people }, new Map([['Ana', 'Ana María']]));
+    const fresh = new Store(be);
+    await fresh.init();
+    expect(fresh.config.schools).toEqual([{ person: 'Ana María', from: '2026-09-07', to: '2027-06-18' }]);
+    expect(fresh.config.careFrom).toEqual({ 'Ana María': '2026-09-07' });
+    expect((await be.read('Config'))[0].length).toBeLessThanOrEqual(26); // cabe en A..Z
+  });
+
   it('lee una hoja Config creada por la versión anterior', async () => {
     const be = new MemoryBackend();
     await be.addSheet('Config');
@@ -391,6 +427,8 @@ describe('store sobre una hoja simulada', () => {
     expect(store.config.people[1]).toEqual({ name: 'Papá', role: 'adulto', telework: [2, 5], carryMonth: 0 });
     expect(store.config.leaves).toEqual([]);
     expect(store.config.leaveTypes).toEqual([]);
+    expect(store.config.schools).toEqual([]);
+    expect(store.config.careFrom).toEqual({});
   });
 
   it('no toca hojas de año con formato antiguo', async () => {

@@ -12,12 +12,14 @@ import { SettingsView } from './SettingsView';
 import { Setup } from './Setup';
 import { confirmLeave, hasUnsavedChanges } from './dirty';
 import { useSwipe } from './swipe';
+import { newerBuild, reloadTo } from './update';
 import { YearView } from './YearView';
+import { Upcoming } from './Upcoming';
 import { Icon } from './look';
 import { type Settings, loadSettings, saveSettings } from './settings';
 
-type Tab = 'calendario' | 'año' | 'saldos' | 'ajustes';
-const TABS: Tab[] = ['calendario', 'año', 'saldos', 'ajustes'];
+type Tab = 'próximos' | 'calendario' | 'año' | 'saldos' | 'ajustes';
+const TABS: Tab[] = ['próximos', 'calendario', 'año', 'saldos', 'ajustes'];
 type SettingsPage = 'general' | 'permisos';
 
 // Pestaña y mes en pantalla: se conservan si hay que pasar por Google para renovar la sesión.
@@ -40,12 +42,13 @@ export function App() {
   const [store, setStore] = useState<Store | null>(null);
   const [needLogin, setNeedLogin] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [newBuild, setNewBuild] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [, setVersion] = useState(0);
   const today = todayIso();
   const [view] = useState(savedView);
-  const [tab, setTabState] = useState<Tab>(view?.tab ?? 'calendario');
+  const [tab, setTabState] = useState<Tab>(view?.tab ?? 'próximos');
   const [page, setPage] = useState<SettingsPage>('general');
   const [slide, setSlide] = useState<'' | 'from-right' | 'from-left'>('');
   // El elemento cambia al cambiar de pestaña (se vuelve a montar para animar): se sigue con estado, no con ref
@@ -169,6 +172,19 @@ export function App() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [store, year, run, renew, settings]);
 
+  // ¿Hay una versión nueva publicada? Se mira al abrir y cada vez que se vuelve a la app.
+  useEffect(() => {
+    const check = async () => {
+      const build = await newerBuild();
+      if (!build) return;
+      if (hasUnsavedChanges() || !reloadTo(build)) setNewBuild(build);
+    };
+    check();
+    const onVisible = () => document.visibilityState === 'visible' && check();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
   // Renovar la sesión poco antes de que caduque el token, sin esperar a que falle una operación
   useEffect(() => {
     if (!store || settings.mode !== 'google') return;
@@ -217,8 +233,10 @@ export function App() {
     );
 
   const hasYear = store.years.includes(year);
+  // En «Próximos» manda el año de hoy, no el elegido arriba
+  const shownYear = tab === 'próximos' ? +today.slice(0, 4) : year;
   const monthly = tab === 'calendario';
-  const needsYear = tab === 'calendario' || tab === 'año' || tab === 'saldos';
+  const needsYear = tab === 'calendario' || tab === 'año' || tab === 'saldos' || tab === 'próximos';
   const goTo = (date: string) => {
     setYear(+date.slice(0, 4));
     setMonth(+date.slice(5, 7));
@@ -237,13 +255,13 @@ export function App() {
     <>
       <header>
         <div className="htitle">
-          <strong>{tab === 'ajustes' ? 'Ajustes' : monthly ? MONTHS[month - 1] : year}</strong>
+          <strong>{tab === 'próximos' ? 'Próximos días' : tab === 'ajustes' ? 'Ajustes' : monthly ? MONTHS[month - 1] : year}</strong>
           {monthly && <span>{year}</span>}
           {(busy || settings.mode === 'demo') && (
             <span className={`status${busy ? ' busy' : ''}`}>{busy ? 'Guardando…' : 'Demo'}</span>
           )}
         </div>
-        <div className="monthnav">
+        <div className="monthnav" hidden={tab === 'próximos'}>
           {(monthly ? `${year}-${String(month).padStart(2, '0')}` : String(year)) !== (monthly ? today.slice(0, 7) : today.slice(0, 4)) && (
             <button
               className="today"
@@ -262,6 +280,12 @@ export function App() {
           {error}
         </p>
       )}
+      {newBuild && (
+        <p className="warn">
+          Hay una versión nueva de la app.{' '}
+          <button onClick={() => confirmLeave() && reloadTo(newBuild, true)}>Actualizar</button>
+        </p>
+      )}
       {expired && (
         <p className="warn">
           La sesión de Google necesita renovarse y hay cambios sin guardar, que se perderán al hacerlo.{' '}
@@ -275,15 +299,15 @@ export function App() {
       )}
 
       <main ref={setMainEl} key={tab} className={slide}>
-        {!hasYear && needsYear ? (
+        {!store.years.includes(shownYear) && needsYear ? (
           <div className="center">
-            {store.legacy.includes(String(year)) ? (
-              <LegacyImport store={store} source={String(year)} run={run} busy={busy} />
+            {store.legacy.includes(String(shownYear)) ? (
+              <LegacyImport store={store} source={String(shownYear)} run={run} busy={busy} />
             ) : (
               <>
-                <p>Todavía no existe la hoja {year}.</p>
-                <button className="primary" disabled={busy} onClick={() => run(() => store.createYear(year))}>
-                  Crear hoja {year}
+                <p>Todavía no existe la hoja {shownYear}.</p>
+                <button className="primary" disabled={busy} onClick={() => run(() => store.createYear(shownYear))}>
+                  Crear hoja {shownYear}
                 </button>
               </>
             )}
@@ -293,6 +317,8 @@ export function App() {
               </button>
             )}
           </div>
+        ) : tab === 'próximos' ? (
+          <Upcoming store={store} today={today} onGo={goTo} />
         ) : tab === 'calendario' ? (
           <Calendar
             store={store}
@@ -341,7 +367,7 @@ export function App() {
         {TABS.map((t) => (
           <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>
             <span className="ico"><Icon name={t} /></span>
-            {t[0].toUpperCase() + t.slice(1)}
+            {t === 'próximos' ? 'Próximos' : t[0].toUpperCase() + t.slice(1)}
           </button>
         ))}
       </nav>
