@@ -3,7 +3,7 @@
  * y quién ha cubierto los días en que algún niño necesitaba a alguien.
  */
 import { CODE_HOLIDAY, CODE_TELEWORK } from './defaults';
-import { isWeekend } from './dates';
+import { addDays, isWeekend } from './dates';
 import { coverage, findCode, specialDays } from './logic';
 import type { Code, Config, Grid, Person } from './types';
 
@@ -88,4 +88,44 @@ function datesOf(grid: Grid, year: number): Map<string, Map<string, string>> {
     }
   }
   return out;
+}
+
+const absenceCodeOf = (config: Config, person: Person, c: string | undefined) => {
+  if (!c || c === CODE_HOLIDAY) return undefined;
+  const code = findCode(config, person, c) ?? config.codes.find((x) => x.code === c);
+  return code && isAbsence(code, person.role) ? code : undefined;
+};
+
+/** Días de ausencia por mes (sin festivos ni teletrabajo). */
+export function monthly(config: Config, grid: Grid, year: number, person: Person, today: string) {
+  const out = Array.from({ length: 12 }, () => ({ spent: 0, planned: 0 }));
+  for (const [date, c] of Object.entries(grid[person.name] ?? {})) {
+    if (!date.startsWith(String(year)) || !absenceCodeOf(config, person, c)) continue;
+    const m = +date.slice(5, 7) - 1;
+    if (date <= today) out[m].spent++;
+    else out[m].planned++;
+  }
+  return out;
+}
+
+/**
+ * Próxima ausencia a partir de mañana: el tramo seguido con el mismo código (los fines de semana
+ * y festivos intermedios no lo cortan). `gridOf` da la rejilla de cada año.
+ */
+export function nextAbsence(config: Config, gridOf: (y: number) => Grid, person: Person, today: string) {
+  const at = (d: string) => gridOf(+d.slice(0, 4))[person.name]?.[d];
+  let d = addDays(today, 1);
+  for (let i = 0; i < 400; i++, d = addDays(d, 1)) {
+    const code = absenceCodeOf(config, person, at(d));
+    if (!code) continue;
+    let end = d;
+    let days = 0;
+    for (let e = d, gap = 0; gap < 5; e = addDays(e, 1)) {
+      if (at(e) === code.code) { end = e; days++; gap = 0; }
+      else if (isWeekend(e) || at(e) === CODE_HOLIDAY) gap++;
+      else break;
+    }
+    return { code, from: d, to: end, days, inDays: Math.round((Date.parse(d) - Date.parse(today)) / 86400000) };
+  }
+  return undefined;
 }

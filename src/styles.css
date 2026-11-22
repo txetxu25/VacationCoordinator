@@ -383,3 +383,24 @@ button.icon { padding: 6px 0; width: 38px; }
 button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: none; }
 details summary { margin-top: 8px; }
 .msub { display: block; font-size: 0.76rem; color: var(--muted); }
+
+/* Saldos: próximas ausencias, permiso, meses */
+.pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+.pills .pill { margin: 0; }
+.pill.next { background: var(--brand-soft); color: var(--text); }
+.pill.next i { font-size: 0.72rem; }
+.leave { margin: 6px 0 4px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--brand-soft) 45%, transparent); }
+.leave h3 { margin-top: 0 !important; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; }
+.tiles span { display: flex; flex-direction: column; font-size: 0.72rem; color: var(--muted); }
+.tiles b { font-size: 1.5rem; color: var(--text); line-height: 1.1; }
+.tiles .neg b { color: var(--danger); }
+.months { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; align-items: end; }
+.mcol { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.mbar { display: flex; flex-direction: column; justify-content: flex-end; width: 100%; max-width: 18px; height: 64px; border-radius: 6px; background: var(--cell-empty); overflow: hidden; }
+.mbar > span { width: 100%; }
+.mcol small { font-size: 0.62rem; color: var(--muted); min-height: 0.8em; }
+.mcol em { font-style: normal; font-size: 0.68rem; color: var(--muted); font-weight: 600; }
+.mcol.now em { color: var(--accent); }
+.hnum small { display: block; font-size: 0.65rem; color: var(--muted); font-weight: 500; }
+.hbar { grid-template-columns: 8.5em 1fr 2.8em; }
