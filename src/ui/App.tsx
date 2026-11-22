@@ -15,7 +15,7 @@ import { useSwipe } from './swipe';
 import { newerBuild, reloadTo } from './update';
 import { YearView } from './YearView';
 import { Upcoming } from './Upcoming';
-import { Icon } from './look';
+import { TabBar } from './TabBar';
 import { type Settings, loadSettings, saveSettings } from './settings';
 
 type Tab = 'próximos' | 'calendario' | 'año' | 'saldos' | 'ajustes';
@@ -363,14 +363,12 @@ export function App() {
         )}
       </main>
 
-      <nav>
-        {TABS.map((t) => (
-          <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>
-            <span className="ico"><Icon name={t} /></span>
-            {t === 'próximos' ? 'Próximos' : t[0].toUpperCase() + t.slice(1)}
-          </button>
-        ))}
-      </nav>
+      <TabBar
+        tabs={TABS}
+        active={tab}
+        label={(t) => (t === 'próximos' ? 'Próximos' : t[0].toUpperCase() + t.slice(1))}
+        onSelect={setTab}
+      />
     </>
   );
 }

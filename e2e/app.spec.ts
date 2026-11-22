@@ -115,3 +115,15 @@ test('si hay una versión nueva publicada, la app se recarga sola una vez', asyn
   // Si tras recargar sigue saliendo la versión vieja (caché), avisa en vez de recargar en bucle
   await expect(page.getByText('Hay una versión nueva de la app.')).toBeVisible();
 });
+
+test('barra de pestañas: arrastrar el dedo por la barra elige la pestaña al soltar', async ({ page }) => {
+  const bar = (await page.locator('nav.glassbar').boundingBox())!;
+  const y = bar.y + bar.height / 2;
+  const x = (i: number) => bar.x + 6 + ((bar.width - 12) / 5) * (i + 0.5);
+  await page.mouse.move(x(1), y);
+  await page.mouse.down();
+  for (let i = 1; i <= 12; i++) await page.mouse.move(x(1) + ((x(3) - x(1)) * i) / 12, y);
+  await expect(page.locator('nav.glassbar button.hover')).toHaveText('Saldos');
+  await page.mouse.up();
+  await expect(page.locator('nav .active')).toHaveText('Saldos');
+});

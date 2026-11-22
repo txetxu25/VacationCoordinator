@@ -447,3 +447,50 @@ details summary { margin-top: 8px; }
 }
 .toast button { background: none; border: 0; color: #7fe0c2; font-weight: 700; }
 .tag b { font-weight: 700; }
+
+/* ============ Barra de pestañas flotante de cristal ============ */
+body { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+nav.glassbar {
+  --glass: color-mix(in srgb, var(--surface) 55%, transparent);
+  --glass-edge: rgba(255, 255, 255, 0.55);
+  --lens: rgba(255, 255, 255, 0.6);
+  --pad: 6px;
+  position: fixed; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 9;
+  max-width: 520px; margin: 0 auto; padding: var(--pad); display: flex;
+  border-radius: 999px; border: 1px solid var(--glass-edge); border-top-color: rgba(255, 255, 255, 0.8);
+  background: var(--glass);
+  backdrop-filter: blur(22px) saturate(190%); -webkit-backdrop-filter: blur(22px) saturate(190%);
+  box-shadow: 0 10px 30px rgba(20, 30, 25, 0.16), 0 2px 6px rgba(20, 30, 25, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+:root[data-theme='dark'] nav.glassbar {
+  --glass: color-mix(in srgb, #2a302d 55%, transparent);
+  --glass-edge: rgba(255, 255, 255, 0.12);
+  --lens: rgba(255, 255, 255, 0.14);
+  border-top-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+/* La «lente»: píldora de cristal más claro que se desliza a la pestaña activa (o sigue el dedo) */
+nav.glassbar .lens {
+  position: absolute; top: var(--pad); bottom: var(--pad); left: var(--pad);
+  width: calc((100% - 2 * var(--pad)) / var(--n));
+  transform: translateX(calc(var(--pos) * 100%));
+  border-radius: 999px; background: var(--lens);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 2px 8px rgba(20, 30, 25, 0.1);
+  transition: transform 0.42s cubic-bezier(0.3, 1.35, 0.5, 1), scale 0.2s ease;
+  pointer-events: none;
+}
+nav.glassbar.dragging .lens { transition: scale 0.2s ease; scale: 1.08 1.12; }
+nav.glassbar button {
+  position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 7px 0 5px; border: 0; border-radius: 999px; background: none; box-shadow: none;
+  color: var(--muted); font-size: 0.66rem; font-weight: 600; transition: color 0.2s, transform 0.25s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+nav.glassbar button.active { color: var(--accent); }
+nav.glassbar button.hover { transform: scale(1.12); color: var(--text); }
+nav.glassbar button:active { transform: scale(0.94); }
+nav.glassbar button svg { width: 23px; height: 23px; }
+.toast { bottom: calc(92px + env(safe-area-inset-bottom)); }
+@media (prefers-reduced-motion: reduce) {
+  nav.glassbar .lens, nav.glassbar button { transition: none; }
+}
