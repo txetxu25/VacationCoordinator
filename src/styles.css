@@ -494,3 +494,4 @@ nav.glassbar button svg { width: 23px; height: 23px; }
 @media (prefers-reduced-motion: reduce) {
   nav.glassbar .lens, nav.glassbar button { transition: none; }
 }
+.banner.ok .bicon { color: #fff; background: #2e9e5b; }
